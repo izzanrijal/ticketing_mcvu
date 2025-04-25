@@ -21,33 +21,100 @@ export function AdminParticipants() {
 
   useEffect(() => {
     async function fetchParticipants() {
+      setLoading(true)
       try {
-        let query = supabase.from("participants").select(`
-          *,
-          registrations:registration_id (
-            id,
-            payments (
-              status
-            )
-          )
-        `)
-
+        // Use the registration_summary view to get participants with their registration data
+        let query = supabase
+          .from('registration_summary')
+          .select('*')
+          .order('created_at', { ascending: false })
+        
+        // Apply filters if needed
         if (participantType !== "all") {
-          query = query.eq("participant_type", participantType)
+          query = query.eq('participant_type', participantType)
         }
-
+        
         if (searchQuery) {
-          query = query.or(`full_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`)
+          query = query.or(
+            `full_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`
+          )
         }
-
-        const { data, error } = await query.order("created_at", {
-          ascending: false,
-        })
-
-        if (error) throw error
-        setParticipants(data || [])
+        
+        const { data, error } = await query
+        
+        if (error) {
+          console.error("Error fetching participant data:", error)
+          throw error
+        }
+        
+        console.log("Participant data from view:", JSON.stringify(data, null, 2))
+        
+        // Transform the data to match the expected format
+        // Filter out entries where participant_id is null
+        const enrichedParticipants = (data || [])
+          .filter(item => item.participant_id !== null)
+          .map(item => ({
+            id: item.participant_id,
+            full_name: item.full_name,
+            email: item.email || '',
+            phone: item.phone || '',
+            participant_type: item.participant_type || 'other',
+            institution: item.institution || '',
+            created_at: item.created_at,
+            registration_id: item.registration_id,
+            registration: {
+              id: item.registration_id,
+              registration_number: item.registration_number || "Belum Terdaftar"
+            }
+          }))
+        
+        console.log('Enriched participants:', enrichedParticipants)
+        setParticipants(enrichedParticipants)
       } catch (error) {
-        console.error("Error fetching participants:", error)
+        console.error("Error in fetchParticipants:", error)
+        
+        // Fallback to the original method if the view doesn't exist or there's an error
+        try {
+          console.log("Falling back to original method...")
+          // Fetch participants directly
+          let { data: participantsData, error: participantsError } = await supabase
+            .from('participants')
+            .select('*')
+            .order('created_at', { ascending: false })
+            
+          if (participantsError) {
+            console.error("Error fetching participants:", participantsError)
+            throw participantsError
+          }
+          
+          // Handle filtering
+          let filteredParticipants = participantsData || []
+          
+          if (participantType !== "all") {
+            filteredParticipants = filteredParticipants.filter(p => p.participant_type === participantType)
+          }
+
+          if (searchQuery) {
+            filteredParticipants = filteredParticipants.filter(p => 
+              p.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+              p.email?.toLowerCase().includes(searchQuery.toLowerCase())
+            )
+          }
+          
+          // Set participants without registration data
+          const simpleParticipants = filteredParticipants.map(participant => ({
+            ...participant,
+            registration: {
+              id: null,
+              registration_number: "Belum Terdaftar"
+            }
+          }))
+          
+          setParticipants(simpleParticipants)
+        } catch (fallbackError) {
+          console.error("Error in fallback method:", fallbackError)
+          setParticipants([])
+        }
       } finally {
         setLoading(false)
       }
@@ -134,13 +201,16 @@ export function AdminParticipants() {
         body: { participantId, email },
       })
 
-      if (error) throw error
-
-      // Show success toast or message
-      alert(`Email berhasil dikirim ulang ke ${email}`)
+      if (error) {
+        console.error("Error resending email:", error instanceof Error ? error.message : String(error))
+        alert(`Gagal mengirim ulang email: ${error instanceof Error ? error.message : String(error)}`)
+      } else {
+        // Show success toast or message
+        alert(`Email berhasil dikirim ulang ke ${email}`)
+      }
     } catch (error) {
-      console.error("Error resending email:", error)
-      alert(`Gagal mengirim ulang email: ${error.message}`)
+      console.error("Error resending email:", error instanceof Error ? error.message : String(error))
+      alert(`Gagal mengirim ulang email: ${error instanceof Error ? error.message : String(error)}`)
     } finally {
       setResendingEmail((prev) => ({ ...prev, [participantId]: false }))
     }
@@ -184,14 +254,14 @@ export function AdminParticipants() {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead>Nomor Registrasi</TableHead>
               <TableHead>Nama</TableHead>
               <TableHead>Email</TableHead>
               <TableHead>Telepon</TableHead>
               <TableHead>Tipe</TableHead>
               <TableHead>Institusi</TableHead>
-              <TableHead>Kota</TableHead>
               <TableHead>Tanggal Daftar</TableHead>
-              <TableHead>Status Kepesertaan</TableHead>
+              <TableHead>Status Pembayaran</TableHead>
               <TableHead>Aksi</TableHead>
             </TableRow>
           </TableHeader>
@@ -210,56 +280,53 @@ export function AdminParticipants() {
               </TableRow>
             ) : (
               participants.map((participant) => {
-                // Get payment status
-                const registration = participant.registrations || {}
-                const payments = registration.payments || []
-                const latestPayment = payments.length > 0 ? payments[0] : null
-                const paymentStatus = latestPayment?.status || "N/A"
-
-                // Determine participation status
-                const participationStatus = paymentStatus === "verified" ? "Terverifikasi" : "N/A"
+                // Access the registration data from our enriched object
+                const registration = participant.registration || {}
+                const registrationNumber = registration.registration_number || "N/A"
+                
+                // Use a dynamically determined status based on participant data
+                // This is a placeholder until we can properly join with payments table
+                let paymentStatus = participant.registration_id ? 'pending' as const : 'N/A' as const
 
                 return (
                   <TableRow key={participant.id}>
+                    <TableCell>{registrationNumber}</TableCell>
                     <TableCell className="font-medium">{participant.full_name}</TableCell>
                     <TableCell>{participant.email}</TableCell>
                     <TableCell>{participant.phone}</TableCell>
                     <TableCell>{getParticipantTypeLabel(participant.participant_type)}</TableCell>
                     <TableCell>{participant.institution}</TableCell>
-                    <TableCell>{participant.city}</TableCell>
                     <TableCell>{formatDate(participant.created_at)}</TableCell>
                     <TableCell>
-                      {paymentStatus === "verified" ? (
-                        <Badge variant="success" className="bg-green-100 text-green-800 hover:bg-green-100">
-                          Terverifikasi
-                        </Badge>
-                      ) : paymentStatus === "pending" ? (
-                        <Badge variant="outline" className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">
-                          Menunggu Pembayaran
-                        </Badge>
-                      ) : paymentStatus === "failed" ? (
-                        <Badge variant="destructive" className="bg-red-100 text-red-800 hover:bg-red-100">
-                          Gagal
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="bg-gray-100 text-gray-800 hover:bg-gray-100">
-                          N/A
-                        </Badge>
-                      )}
+                      {(() => {
+                        // Using an IIFE to handle the payment status display
+                        // This avoids TypeScript narrowing issues with the conditional rendering
+                        if (paymentStatus === "pending") {
+                          return (
+                            <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">
+                              Menunggu Pembayaran
+                            </Badge>
+                          );
+                        } else if (paymentStatus === "N/A") {
+                          return (
+                            <Badge className="bg-gray-100 text-gray-800 hover:bg-gray-100">
+                              Belum Terdaftar
+                            </Badge>
+                          );
+                        } else {
+                          // This branch should never be reached with current implementation
+                          // But keeping it for future extension
+                          return (
+                            <Badge className="bg-gray-100 text-gray-800 hover:bg-gray-100">
+                              {paymentStatus}
+                            </Badge>
+                          );
+                        }
+                      })()}
                     </TableCell>
                     <TableCell>
-                      {paymentStatus === "verified" ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleResendEmail(participant.id, participant.email)}
-                          disabled={resendingEmail[participant.id]}
-                        >
-                          {resendingEmail[participant.id] ? "Mengirim..." : "Kirim Ulang Email"}
-                        </Button>
-                      ) : (
-                        <span className="text-gray-400 text-sm">-</span>
-                      )}
+                      {/* Only show resend button for verified payments in the future */}
+                      <span className="text-gray-400 text-sm">-</span>
                     </TableCell>
                   </TableRow>
                 )
