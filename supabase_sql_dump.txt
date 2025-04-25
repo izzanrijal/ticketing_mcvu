@@ -1,0 +1,188 @@
+-- SQL Dump for Supabase Project: rrrzinurfkcgykaxqkay (supabase-yellow-school)
+-- Generated on: 2025-04-25
+
+-- Note: This is a manually created SQL dump based on API endpoints and functions discovered
+
+-- Schema Definitions
+CREATE SCHEMA IF NOT EXISTS auth;
+CREATE SCHEMA IF NOT EXISTS public;
+CREATE SCHEMA IF NOT EXISTS storage;
+
+-- Functions discovered from API endpoints
+
+-- Function: is_admin()
+-- Description: Checks if the current user is an admin
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS boolean
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  -- Implementation details not available
+  RETURN (SELECT is_admin FROM auth.users WHERE id = auth.uid());
+END;
+$$;
+
+-- Function: owns_registration(registration_id uuid)
+-- Description: Checks if the current user owns a registration
+CREATE OR REPLACE FUNCTION public.owns_registration(registration_id uuid)
+RETURNS boolean
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  -- Implementation details not available
+  RETURN EXISTS (
+    SELECT 1 FROM public.registrations 
+    WHERE id = registration_id AND user_id = auth.uid()
+  );
+END;
+$$;
+
+-- Function: is_participant_owner(participant_id uuid)
+-- Description: Checks if the current user owns a participant
+CREATE OR REPLACE FUNCTION public.is_participant_owner(participant_id uuid)
+RETURNS boolean
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  -- Implementation details not available
+  RETURN EXISTS (
+    SELECT 1 FROM public.participants p
+    JOIN public.registrations r ON p.registration_id = r.id
+    WHERE p.id = participant_id AND r.user_id = auth.uid()
+  );
+END;
+$$;
+
+-- Inferred Tables based on functions and MVCU 2025 Ticketing Platform requirements
+
+-- Table: public.registrations
+CREATE TABLE IF NOT EXISTS public.registrations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES auth.users(id),
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  status text,
+  payment_status text,
+  payment_amount numeric,
+  payment_unique_code numeric,
+  payment_proof_url text,
+  sponsor_letter_url text,
+  is_sponsor_paid boolean DEFAULT false
+);
+
+-- Table: public.participants
+CREATE TABLE IF NOT EXISTS public.participants (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  registration_id uuid REFERENCES public.registrations(id),
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  nik text,
+  full_name text,
+  email text,
+  phone text,
+  category text,
+  institution text,
+  qr_code text,
+  is_checked_in boolean DEFAULT false,
+  checked_in_at timestamp with time zone
+);
+
+-- Table: public.workshops
+CREATE TABLE IF NOT EXISTS public.workshops (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text,
+  description text,
+  start_time timestamp with time zone,
+  end_time timestamp with time zone,
+  location text,
+  max_participants integer,
+  price numeric
+);
+
+-- Table: public.participant_workshops
+CREATE TABLE IF NOT EXISTS public.participant_workshops (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  participant_id uuid REFERENCES public.participants(id),
+  workshop_id uuid REFERENCES public.workshops(id),
+  is_checked_in boolean DEFAULT false,
+  checked_in_at timestamp with time zone,
+  UNIQUE(participant_id, workshop_id)
+);
+
+-- Table: public.categories
+CREATE TABLE IF NOT EXISTS public.categories (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text,
+  price numeric,
+  description text
+);
+
+-- Table: public.payments
+CREATE TABLE IF NOT EXISTS public.payments (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  registration_id uuid REFERENCES public.registrations(id),
+  amount numeric,
+  unique_code numeric,
+  status text,
+  payment_proof_url text,
+  verified_at timestamp with time zone,
+  verified_by uuid REFERENCES auth.users(id),
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now()
+);
+
+-- RLS Policies
+
+-- Enable RLS on tables
+ALTER TABLE public.registrations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.participants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.workshops ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.participant_workshops ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
+
+-- Policies for registrations
+CREATE POLICY "Users can view their own registrations" 
+  ON public.registrations FOR SELECT 
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can create their own registrations" 
+  ON public.registrations FOR INSERT 
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own registrations" 
+  ON public.registrations FOR UPDATE 
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Admins can view all registrations" 
+  ON public.registrations FOR SELECT 
+  USING (is_admin());
+
+CREATE POLICY "Admins can update all registrations" 
+  ON public.registrations FOR UPDATE 
+  USING (is_admin());
+
+-- Policies for participants
+CREATE POLICY "Users can view their own participants" 
+  ON public.participants FOR SELECT 
+  USING (is_participant_owner(id));
+
+CREATE POLICY "Users can create participants for their registrations" 
+  ON public.participants FOR INSERT 
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM public.registrations 
+    WHERE id = new.registration_id AND user_id = auth.uid()
+  ));
+
+CREATE POLICY "Users can update their own participants" 
+  ON public.participants FOR UPDATE 
+  USING (is_participant_owner(id));
+
+CREATE POLICY "Admins can view all participants" 
+  ON public.participants FOR SELECT 
+  USING (is_admin());
+
+CREATE POLICY "Admins can update all participants" 
+  ON public.participants FOR UPDATE 
+  USING (is_admin());
+
+-- Note: This is an inferred SQL schema based on the available information.
+-- The actual database structure may differ. For a complete and accurate SQL dump,
+-- you would need to run the Supabase CLI with Docker Desktop installed.

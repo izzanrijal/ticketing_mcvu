@@ -1,0 +1,117 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Add this import near the top of the file */
+@import "./form-validation.css";
+
+:root {
+  /* Base colors from design system */
+  --background: 36 100% 97%;
+  --foreground: 24 30% 22%;
+
+  /* Primary colors */
+  --primary: 24 30% 22%;
+  --primary-foreground: 0 0% 100%;
+
+  /* Secondary colors */
+  --secondary: 30 60% 90%;
+  --secondary-foreground: 24 30% 22%;
+
+  /* Accent colors */
+  --accent: 30 40% 83%;
+  --accent-foreground: 24 30% 22%;
+
+  /* Muted colors */
+  --muted: 30 60% 90%;
+  --muted-foreground: 24 30% 22%;
+
+  /* Card colors */
+  --card: 0 0% 100%;
+  --card-foreground: 24 30% 22%;
+
+  /* Border colors */
+  --border: 30 40% 83%;
+  --input: 24 30% 22%;
+
+  /* Ring colors */
+  --ring: 24 30% 22%;
+
+  /* Destructive */
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+
+  /* Popover */
+  --popover: 0 0% 100%;
+  --popover-foreground: 24 30% 22%;
+
+  /* Radius */
+  --radius: 0.75rem;
+}
+
+.dark {
+  --background: 24 30% 10%;
+  --foreground: 30 60% 90%;
+
+  --primary: 30 60% 90%;
+  --primary-foreground: 24 30% 22%;
+
+  --secondary: 24 30% 22%;
+  --secondary-foreground: 30 60% 90%;
+
+  --accent: 24 20% 28%;
+  --accent-foreground: 30 60% 90%;
+
+  --muted: 24 20% 28%;
+  --muted-foreground: 30 40% 83%;
+
+  --card: 24 20% 14%;
+  --card-foreground: 30 60% 90%;
+
+  --border: 24 20% 28%;
+  --input: 30 60% 90%;
+
+  --ring: 30 60% 90%;
+
+  --destructive: 0 62% 30%;
+  --destructive-foreground: 0 0% 100%;
+
+  --popover: 24 20% 14%;
+  --popover-foreground: 30 60% 90%;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-gradient-to-br from-amber-50 to-amber-100 text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-primary text-primary-foreground hover:bg-[#5c4132] transition-colors duration-200 rounded-full px-6 py-2;
+  }
+
+  .btn-secondary {
+    @apply border-2 border-primary text-primary hover:bg-secondary transition-colors duration-200 rounded-full px-6 py-2;
+  }
+
+  .btn-icon {
+    @apply flex items-center space-x-2 bg-primary text-primary-foreground hover:bg-[#5c4132] transition-colors duration-200 rounded-full px-4 py-2;
+  }
+
+  .input-primary {
+    @apply w-full rounded-lg border-2 border-primary py-2 px-3;
+  }
+
+  .card-basic {
+    @apply bg-card rounded-xl shadow-sm border p-6;
+  }
+
+  .card-interactive {
+    @apply border-2 border-primary bg-card hover:bg-secondary transition-colors duration-200 rounded-xl p-6;
+  }
+}

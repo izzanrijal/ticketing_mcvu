@@ -1,0 +1,11 @@
+/* Only show error styling on inputs after form validation is triggered */
+input:not(.form-validated input:invalid) {
+  border-color: var(--input-border) !important;
+}
+
+/* Add the form-validated class when validation is triggered */
+.form-validated input:invalid,
+.form-validated select:invalid,
+.form-validated textarea:invalid {
+  border-color: var(--destructive) !important;
+}
