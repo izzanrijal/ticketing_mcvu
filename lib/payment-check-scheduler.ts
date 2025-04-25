@@ -3,11 +3,11 @@
  * This module schedules payment checks for registrations
  */
 
-import { createClient } from "@/lib/supabase"
+import { supabaseAdmin } from "@/lib/supabase"
 import { checkPaymentForRegistration } from "@/lib/payment-processor"
 
-// Create Supabase client
-const supabase = createClient()
+// Use the pre-configured Supabase admin client
+const supabase = supabaseAdmin
 
 // Schedule a payment check for a registration
 export async function schedulePaymentCheck(registrationId: string) {

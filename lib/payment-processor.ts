@@ -3,12 +3,12 @@
  * This module handles payment verification and processing logic
  */
 
-import { createClient } from "@/lib/supabase"
+import { supabaseAdmin } from "@/lib/supabase"
 import { fetchMutations, type MootaMutation } from "@/lib/moota-api"
 import { sendPaymentConfirmationEmail } from "@/lib/email-service"
 
-// Create Supabase client
-const supabase = createClient()
+// Use the pre-configured Supabase admin client
+const supabase = supabaseAdmin
 
 // Maximum number of check attempts (5 minutes interval for 24 hours = 288 attempts)
 const MAX_CHECK_ATTEMPTS = 288

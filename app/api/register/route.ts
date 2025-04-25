@@ -1,34 +1,43 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { supabaseAdmin } from "@/lib/supabase"
 import { schedulePaymentCheck } from "@/lib/payment-check-scheduler"
 
 export async function POST(request: Request) {
   try {
-    // Gunakan service role key untuk bypass RLS
-    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-      auth: {
-        persistSession: false,
-      },
-    })
+    // Gunakan supabaseAdmin yang sudah dikonfigurasi dengan service role key
+    const supabase = supabaseAdmin
+
+    // Check if this is a multipart form request
+    const contentType = request.headers.get('content-type') || ''
     
-    let registrationData, registrationNumber, totalAmount, sponsorLetterFile;
+    let registrationData: any
+    let registrationNumber: string
+    let totalAmount: number
+    let sponsorLetterFile: File | null = null
     
-    // Check content type to determine how to parse the request
-    const contentType = request.headers.get("content-type") || "";
-    
-    if (contentType.includes("multipart/form-data")) {
-      // Handle FormData with file upload
-      const formData = await request.formData();
-      registrationData = JSON.parse(formData.get("registrationData") as string);
-      registrationNumber = formData.get("registrationNumber") as string;
-      totalAmount = parseFloat(formData.get("totalAmount") as string);
-      sponsorLetterFile = formData.get("sponsor_letter") as File;
+    if (contentType.includes('multipart/form-data')) {
+      // Handle multipart form data
+      const formData = await request.formData()
+      
+      // Get JSON data
+      const jsonData = formData.get('data')
+      if (jsonData) {
+        const parsedData = JSON.parse(jsonData.toString())
+        registrationData = parsedData.registrationData
+        registrationNumber = parsedData.registrationNumber
+        totalAmount = parsedData.totalAmount
+      } else {
+        throw new Error('Missing required JSON data in form')
+      }
+      
+      // Get file
+      sponsorLetterFile = formData.get('sponsor_letter') as File | null
     } else {
-      // Handle regular JSON request
-      const jsonData = await request.json();
-      registrationData = jsonData.registrationData;
-      registrationNumber = jsonData.registrationNumber;
-      totalAmount = jsonData.totalAmount;
+      // Handle JSON data (for backward compatibility)
+      const jsonData = await request.json()
+      registrationData = jsonData.registrationData
+      registrationNumber = jsonData.registrationNumber
+      totalAmount = jsonData.totalAmount
     }
 
     console.log("API received data:", { registrationNumber, totalAmount })
@@ -239,43 +248,6 @@ export async function POST(request: Request) {
     const registrationId = registration.id
     console.log("Registration created with ID:", registrationId)
 
-    // Handle sponsor letter upload if present
-    if (registrationData.payment_type === "sponsor" && sponsorLetterFile) {
-      try {
-        console.log("Uploading sponsor letter file...");
-        
-        // Create a buffer from the file
-        const fileBuffer = await sponsorLetterFile.arrayBuffer();
-        const fileName = `${registrationId}-${Date.now()}.pdf`;
-        
-        // Upload to Supabase storage
-        const { data: uploadData, error: uploadError } = await supabase
-          .storage
-          .from('sponsor_letters')
-          .upload(fileName, fileBuffer, {
-            contentType: 'application/pdf'
-          });
-          
-        if (uploadError) {
-          console.error("Sponsor letter upload error:", uploadError);
-        } else {
-          console.log("Sponsor letter uploaded successfully:", uploadData.path);
-          
-          // Update registration with sponsor letter URL
-          const { error: updateError } = await supabase
-            .from("registrations")
-            .update({ sponsor_letter_url: uploadData.path })
-            .eq("id", registrationId);
-            
-          if (updateError) {
-            console.error("Error updating registration with sponsor letter URL:", updateError);
-          }
-        }
-      } catch (fileError) {
-        console.error("Error processing sponsor letter file:", fileError);
-      }
-    }
-    
     // Create payment record with the unique amount and ONLY use registration_id
     const paymentData = {
       status: "pending",
@@ -287,6 +259,42 @@ export async function POST(request: Request) {
           ? "Pembayaran sponsor"
           : `Pembayaran mandiri (Unique Deduction: ${uniqueDeduction})`,
       check_attempts: 0, // Initialize check attempts counter
+    }
+    
+    // Handle file upload if present
+    if (sponsorLetterFile && registrationData.payment_type === "sponsor") {
+      try {
+        // Upload file to Supabase storage
+        const fileName = `sponsor_letter_${registrationId}_${Date.now()}.pdf`
+        
+        // Convert file to arrayBuffer for upload
+        const arrayBuffer = await sponsorLetterFile.arrayBuffer()
+        const fileBuffer = new Uint8Array(arrayBuffer)
+        
+        const { data: uploadData, error: uploadError } = await supabase
+          .storage
+          .from('sponsor_letters')
+          .upload(fileName, fileBuffer, {
+            contentType: 'application/pdf'
+          })
+          
+        if (uploadError) {
+          console.error("File upload error:", uploadError)
+        } else {
+          // Update registration with sponsor letter URL
+          await supabase
+            .from('registrations')
+            .update({ 
+              sponsor_letter_url: uploadData.path 
+            })
+            .eq('id', registrationId)
+            
+          console.log("Sponsor letter uploaded successfully:", uploadData.path)
+        }
+      } catch (fileError) {
+        console.error("Error processing sponsor letter:", fileError)
+        // Continue with registration even if file upload fails
+      }
     }
 
     console.log("Creating payment with data:", paymentData)
@@ -312,6 +320,14 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     console.error("Server error:", error)
-    return NextResponse.json({ error: "Internal server error: " + error.message }, { status: 500 })
+    // Always return a proper JSON response, even for errors
+    return NextResponse.json({ 
+      error: "Internal server error: " + (error instanceof Error ? error.message : String(error)) 
+    }, { 
+      status: 500,
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
   }
 }

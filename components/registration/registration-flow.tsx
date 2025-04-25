@@ -158,37 +158,42 @@ export function RegistrationFlow() {
           description: "Mohon tunggu sebentar",
         })
 
-        // Handle file upload separately if sponsor payment with letter
-        let formData;
-        let response;
+        // Buat endpoint API khusus untuk menangani pendaftaran
+        // Use FormData to handle file uploads properly
+        const formData = new FormData()
         
-        if (registrationData.payment_type === "sponsor" && registrationData.sponsor_letter) {
-          // Use FormData for file upload
-          formData = new FormData();
-          formData.append('registrationData', JSON.stringify(registrationData));
-          formData.append('registrationNumber', registrationNumber);
-          formData.append('totalAmount', totalAmount.toString());
-          formData.append('sponsor_letter', registrationData.sponsor_letter);
-          
-          response = await fetch("/api/register", {
-            method: "POST",
-            body: formData,
-          });
-        } else {
-          // Regular JSON request for non-file uploads
-          response = await fetch("/api/register", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              registrationData,
-              registrationNumber,
-              totalAmount,
-            }),
-          });
+        // Create a copy of registrationData without the file object
+        const registrationDataCopy = {
+          ...registrationData,
+          sponsor_letter: undefined // Remove file object from JSON
         }
+        
+        // Add JSON data as a string
+        formData.append('data', JSON.stringify({
+          registrationData: registrationDataCopy,
+          registrationNumber,
+          totalAmount,
+        }))
+        
+        // Add file separately if it exists
+        if (registrationData.payment_type === "sponsor" && registrationData.sponsor_letter) {
+          formData.append('sponsor_letter', registrationData.sponsor_letter)
+        }
+        
+        const response = await fetch("/api/register", {
+          method: "POST",
+          // Don't set Content-Type header - browser will set it with boundary
+          body: formData,
+        })
 
+        // Check for non-JSON responses
+        const contentType = response.headers.get("content-type")
+        if (!contentType || !contentType.includes("application/json")) {
+          const textResponse = await response.text()
+          console.error("Non-JSON response:", textResponse)
+          throw new Error("Server returned non-JSON response")
+        }
+        
         if (!response.ok) {
           const errorData = await response.json()
           console.error("API registration error details:", errorData)

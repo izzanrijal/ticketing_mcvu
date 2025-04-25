@@ -3,11 +3,11 @@
  * This module handles sending emails for payment confirmations and tickets
  */
 
-import { createClient } from "@/lib/supabase"
+import { supabaseAdmin } from "@/lib/supabase"
 import { generateQRCode } from "@/lib/qr-utils"
 
-// Create Supabase client
-const supabase = createClient()
+// Use the pre-configured Supabase admin client
+const supabase = supabaseAdmin
 
 // Function to send payment confirmation email with QR code ticket
 export async function sendPaymentConfirmationEmail(registration: any) {
