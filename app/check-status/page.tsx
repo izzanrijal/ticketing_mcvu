@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AlertCircle, CheckCircle, XCircle } from "lucide-react"
-import RegistrationNumberInput from "@/components/registration-number-input"
+import { RegistrationNumberInput } from "@/components/registration-number-input"
 
 export default function CheckStatusPage() {
   const [registrationNumber, setRegistrationNumber] = useState("")

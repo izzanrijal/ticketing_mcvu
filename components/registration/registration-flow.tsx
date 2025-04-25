@@ -66,7 +66,6 @@ export function RegistrationFlow() {
   }, [toast])
 
   const handleCategorySelection = (data: {
-    ticket_id?: string
     participant_count: number
     payment_type: "self" | "sponsor"
     sponsor_letter?: File
@@ -88,7 +87,6 @@ export function RegistrationFlow() {
 
     setRegistrationData({
       ...registrationData,
-      ticket_id: data.ticket_id || "",
       payment_type: data.payment_type,
       sponsor_letter: data.sponsor_letter,
       participants,

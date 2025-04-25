@@ -40,8 +40,10 @@ export function AdminHeader({ user, onSignOut, activeTab = "", setActiveTab = ()
           </Button>
         </SheetTrigger>
         <SheetContent side="left" className="w-64 p-0">
-          <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
-          <AdminSidebar activeTab={activeTab} setActiveTab={handleTabChange} />
+          <div className="flex h-14 items-center border-b px-4">
+            <span className="text-xl font-bold">MCVU 2025</span>
+          </div>
+          <AdminSidebar activeTab={activeTab} setActiveTab={handleTabChange} isMobile={true} />
         </SheetContent>
       </Sheet>
       <div className="flex-1">

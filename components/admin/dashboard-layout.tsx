@@ -10,10 +10,11 @@ import { AdminHeader } from "@/components/admin/header"
 interface AdminDashboardLayoutProps {
   children: React.ReactNode
   user: any
+  activeTab?: string
 }
 
-export function AdminDashboardLayout({ children, user }: AdminDashboardLayoutProps) {
-  const [activeTab, setActiveTab] = useState("overview")
+export function AdminDashboardLayout({ children, user, activeTab: initialActiveTab }: AdminDashboardLayoutProps) {
+  const [activeTab, setActiveTab] = useState(initialActiveTab || "overview")
   const pathname = usePathname()
 
   // Update active tab based on current path
@@ -52,6 +53,7 @@ export function AdminDashboardLayout({ children, user }: AdminDashboardLayoutPro
 
   return (
     <div className="flex min-h-screen bg-muted/20">
+      {/* Desktop sidebar - will be hidden on mobile via the component's internal styling */}
       <AdminSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
       <div className="flex flex-1 flex-col">
         <AdminHeader user={user} onSignOut={handleSignOut} activeTab={activeTab} setActiveTab={setActiveTab} />

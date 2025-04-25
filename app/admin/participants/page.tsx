@@ -1,18 +1,32 @@
-import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
+import { cookies } from "next/headers"
+import { createServerClient } from "@supabase/ssr"
 
 import { AdminParticipants } from "@/components/admin/participants"
 import { AdminDashboardLayout } from "@/components/admin/dashboard-layout"
 
 export default async function ParticipantsPage() {
-  const cookieStore = cookies()
-  const supabase = createServerComponentClient({ cookies: () => cookieStore })
+  // Create a Supabase client using the same approach as the main admin page
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name) {
+          return cookies().get(name)?.value
+        },
+        set(name, value, options) {
+          // Not used in server component
+        },
+        remove(name, options) {
+          // Not used in server component
+        },
+      },
+    }
+  )
 
   // Get the current user
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
 
   // If no user, redirect to login
   if (!user) {

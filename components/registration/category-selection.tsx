@@ -15,9 +15,6 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Skeleton } from "@/components/ui/skeleton"
 
 const formSchema = z.object({
-  ticket_id: z.string({
-    required_error: "Pilih jenis tiket",
-  }),
   participant_count: z.coerce
     .number()
     .min(1, {
@@ -39,8 +36,6 @@ type CategorySelectionProps = {
 }
 
 export function CategorySelection({ onNext }: CategorySelectionProps) {
-  const [tickets, setTickets] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
   const supabase = createClientComponentClient()
 
   const form = useForm<FormValues>({
@@ -51,26 +46,7 @@ export function CategorySelection({ onNext }: CategorySelectionProps) {
     },
   })
 
-  useEffect(() => {
-    async function fetchTickets() {
-      try {
-        const { data, error } = await supabase.from("tickets").select("*").order("sort_order", { ascending: true })
 
-        if (error) {
-          console.error("Error fetching tickets:", error)
-          return
-        }
-
-        setTickets(data || [])
-      } catch (error) {
-        console.error("Error fetching tickets:", error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchTickets()
-  }, [supabase])
 
   function onSubmit(data: FormValues) {
     // Manual validation for sponsor letter when payment type is sponsor
@@ -116,57 +92,7 @@ export function CategorySelection({ onNext }: CategorySelectionProps) {
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-          {/* Ticket Type Selection Section */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Jenis Tiket</h3>
-            <FormField
-              control={form.control}
-              name="ticket_id"
-              render={({ field }) => (
-                <FormItem className="space-y-3">
-                  <FormControl>
-                    <RadioGroup
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                      className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
-                    >
-                      {loading ? (
-                        // Skeletons while loading
-                        Array.from({ length: 3 }).map((_, index) => (
-                          <Skeleton key={index} className="h-24 w-full" />
-                        ))
-                      ) : tickets.length > 0 ? (
-                        tickets.map((ticket) => (
-                          <FormItem key={ticket.id} className="flex items-center space-x-3 space-y-0">
-                            <FormControl>
-                              <Card
-                                className={`w-full cursor-pointer transition-all hover:opacity-90 border ${
-                                  field.value === ticket.id ? "ring-2 ring-primary border-primary" : ""
-                                }`}
-                                onClick={() => field.onChange(ticket.id)}
-                              >
-                                <CardHeader className="p-4">
-                                  <div className="flex items-center justify-between">
-                                    <FormLabel className="font-medium cursor-pointer">{ticket.name}</FormLabel>
-                                    <RadioGroupItem value={ticket.id} className="sr-only" />
-                                  </div>
-                                  <CardDescription className="text-xs">{ticket.description}</CardDescription>
-                                </CardHeader>
-                                {/* Optionally display prices if needed, requires fetching participant types */}
-                              </Card>
-                            </FormControl>
-                          </FormItem>
-                        ))
-                      ) : (
-                        <p className="text-muted-foreground col-span-full">Tidak ada tiket yang tersedia saat ini.</p>
-                      )}
-                    </RadioGroup>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
+
 
           {/* Participant Count Section */}
           <div className="space-y-4">

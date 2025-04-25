@@ -42,28 +42,23 @@ export function EnhancedOverview() {
         const completedPayments = payments?.filter((p) => p.status === "verified").length || 0
 
         // Get check-in stats
-        const { count: checkinsCount } = await supabase.from("check_ins").select("*", { count: "exact", head: true })
+        let checkinsCount = 0
+        try {
+          const { count } = await supabase.from("check_ins").select("*", { count: "exact", head: true })
+          checkinsCount = count || 0
+        } catch (error) {
+          console.error("Error fetching check-ins:", error)
+        }
 
-        // Get workshop stats
-        const { count: workshopRegistrationsCount } = await supabase
-          .from("workshop_registrations")
-          .select("*", { count: "exact", head: true })
-
-        // Get upcoming workshops count
-        const today = new Date().toISOString()
-        const { count: upcomingWorkshopsCount } = await supabase
-          .from("workshops")
-          .select("*", { count: "exact", head: true })
-          .gt("date", today)
-
+        // Set stats without workshop data since those tables don't exist
         setStats({
           totalParticipants: participantsCount || 0,
           totalRevenue,
           pendingPayments,
           completedPayments,
-          totalCheckins: checkinsCount || 0,
-          workshopRegistrations: workshopRegistrationsCount || 0,
-          upcomingWorkshops: upcomingWorkshopsCount || 0,
+          totalCheckins: checkinsCount,
+          workshopRegistrations: 0,
+          upcomingWorkshops: 0,
         })
       } catch (error) {
         console.error("Error fetching stats:", error)
@@ -79,7 +74,7 @@ export function EnhancedOverview() {
     <div className="space-y-6">
       <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Peserta</CardTitle>
@@ -116,16 +111,6 @@ export function EnhancedOverview() {
             </p>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Workshop</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{loading ? "..." : stats.workshopRegistrations}</div>
-            <p className="text-xs text-muted-foreground">Pendaftaran workshop</p>
-          </CardContent>
-        </Card>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -158,14 +143,10 @@ export function EnhancedOverview() {
       <Tabs defaultValue="registrations">
         <TabsList>
           <TabsTrigger value="registrations">Pendaftaran Terbaru</TabsTrigger>
-          <TabsTrigger value="upcoming">Workshop Mendatang</TabsTrigger>
           <TabsTrigger value="payments">Pembayaran Terbaru</TabsTrigger>
         </TabsList>
         <TabsContent value="registrations" className="space-y-4">
           <AdminRecentRegistrations />
-        </TabsContent>
-        <TabsContent value="upcoming" className="space-y-4">
-          <UpcomingWorkshops />
         </TabsContent>
         <TabsContent value="payments" className="space-y-4">
           <RecentPayments />

@@ -21,9 +21,10 @@ import { Button } from "@/components/ui/button"
 interface AdminSidebarProps {
   activeTab: string
   setActiveTab: (tab: string) => void
+  isMobile?: boolean
 }
 
-export function AdminSidebar({ activeTab, setActiveTab }: AdminSidebarProps) {
+export function AdminSidebar({ activeTab, setActiveTab, isMobile = false }: AdminSidebarProps) {
   // Update the menuItems array to include the new troubleshooter menu item
   const menuItems = [
     {
@@ -95,27 +96,31 @@ export function AdminSidebar({ activeTab, setActiveTab }: AdminSidebarProps) {
   ]
 
   return (
-    <div className="hidden w-64 flex-col border-r bg-background md:flex">
-      <div className="flex h-14 items-center border-b px-4">
-        <Link href="/" className="flex items-center gap-2">
-          <span className="text-xl font-bold">MCVU 2025</span>
-        </Link>
-      </div>
+    <div className={`${isMobile ? 'flex' : 'hidden md:flex'} w-64 flex-col border-r bg-background`}>
+      {!isMobile && (
+        <div className="flex h-14 items-center border-b px-4">
+          <Link href="/" className="flex items-center gap-2">
+            <span className="text-xl font-bold">MCVU 2025</span>
+          </Link>
+        </div>
+      )}
       <div className="flex-1 overflow-auto py-2">
         <nav className="grid items-start px-2 text-sm font-medium">
           {menuItems.map((item) => (
-            <Button
-              key={item.id}
-              variant={activeTab === item.id ? "secondary" : "ghost"}
-              className={cn("flex h-10 justify-start gap-2 px-4", activeTab === item.id && "bg-muted")}
+            <Link 
+              key={item.id} 
+              href={item.href}
               onClick={() => setActiveTab(item.id)}
-              asChild
+              className="w-full"
             >
-              <Link href={item.href}>
+              <Button
+                variant={activeTab === item.id ? "secondary" : "ghost"}
+                className={cn("flex h-10 w-full justify-start gap-2 px-4", activeTab === item.id && "bg-muted")}
+              >
                 {item.icon}
                 {item.label}
-              </Link>
-            </Button>
+              </Button>
+            </Link>
           ))}
         </nav>
       </div>
