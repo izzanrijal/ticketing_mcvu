@@ -111,10 +111,10 @@ export function AdminSidebar({ activeTab, setActiveTab }: AdminSidebarProps) {
               onClick={() => setActiveTab(item.id)}
               asChild
             >
-              <a href={item.href}>
+              <Link href={item.href}>
                 {item.icon}
                 {item.label}
-              </a>
+              </Link>
             </Button>
           ))}
         </nav>

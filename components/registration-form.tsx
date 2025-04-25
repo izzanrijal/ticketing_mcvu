@@ -177,7 +177,32 @@ export function RegistrationForm() {
 
       // If sponsor payment, handle sponsor letter upload
       if (data.payment_type === "sponsor" && data.sponsor_letter) {
-        // Handle file upload logic here
+        const file = data.sponsor_letter as File;
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${registration.id}-${Date.now()}.${fileExt}`;
+        
+        const { data: uploadData, error: uploadError } = await supabase
+          .storage
+          .from('sponsor_letters')
+          .upload(fileName, file);
+          
+        if (uploadError) {
+          console.error("File upload error:", uploadError);
+          throw uploadError;
+        }
+        
+        // Update registration with sponsor letter URL
+        const { error: updateError } = await supabase
+          .from('registrations')
+          .update({ 
+            sponsor_letter_url: uploadData.path 
+          })
+          .eq('id', registration.id);
+          
+        if (updateError) {
+          console.error("Registration update error:", updateError);
+          throw updateError;
+        }
       }
 
       // Success! Redirect to payment page

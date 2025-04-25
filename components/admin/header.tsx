@@ -1,5 +1,6 @@
 "use client"
 
+import * as React from "react"
 import { LogOut, Menu, User } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -11,18 +12,27 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet"
 import { AdminSidebar } from "@/components/admin/sidebar"
 
 interface AdminHeaderProps {
   user: any
   onSignOut: () => void
+  activeTab?: string
+  setActiveTab?: (tab: string) => void
 }
 
-export function AdminHeader({ user, onSignOut }: AdminHeaderProps) {
+export function AdminHeader({ user, onSignOut, activeTab = "", setActiveTab = () => {} }: AdminHeaderProps) {
+  const [open, setOpen] = React.useState(false)
+  
+  // Function to handle tab change and close the sheet
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab)
+    setOpen(false)
+  }
   return (
     <header className="sticky top-0 z-10 flex h-14 items-center gap-4 border-b bg-background px-4 lg:px-6">
-      <Sheet>
+      <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger asChild>
           <Button variant="outline" size="icon" className="md:hidden">
             <Menu className="h-5 w-5" />
@@ -30,7 +40,8 @@ export function AdminHeader({ user, onSignOut }: AdminHeaderProps) {
           </Button>
         </SheetTrigger>
         <SheetContent side="left" className="w-64 p-0">
-          <AdminSidebar activeTab="" setActiveTab={() => {}} />
+          <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
+          <AdminSidebar activeTab={activeTab} setActiveTab={handleTabChange} />
         </SheetContent>
       </Sheet>
       <div className="flex-1">

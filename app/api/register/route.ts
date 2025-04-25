@@ -10,8 +10,26 @@ export async function POST(request: Request) {
         persistSession: false,
       },
     })
-
-    const { registrationData, registrationNumber, totalAmount } = await request.json()
+    
+    let registrationData, registrationNumber, totalAmount, sponsorLetterFile;
+    
+    // Check content type to determine how to parse the request
+    const contentType = request.headers.get("content-type") || "";
+    
+    if (contentType.includes("multipart/form-data")) {
+      // Handle FormData with file upload
+      const formData = await request.formData();
+      registrationData = JSON.parse(formData.get("registrationData") as string);
+      registrationNumber = formData.get("registrationNumber") as string;
+      totalAmount = parseFloat(formData.get("totalAmount") as string);
+      sponsorLetterFile = formData.get("sponsor_letter") as File;
+    } else {
+      // Handle regular JSON request
+      const jsonData = await request.json();
+      registrationData = jsonData.registrationData;
+      registrationNumber = jsonData.registrationNumber;
+      totalAmount = jsonData.totalAmount;
+    }
 
     console.log("API received data:", { registrationNumber, totalAmount })
     console.log("Participant count:", registrationData.participants.length)
@@ -221,6 +239,43 @@ export async function POST(request: Request) {
     const registrationId = registration.id
     console.log("Registration created with ID:", registrationId)
 
+    // Handle sponsor letter upload if present
+    if (registrationData.payment_type === "sponsor" && sponsorLetterFile) {
+      try {
+        console.log("Uploading sponsor letter file...");
+        
+        // Create a buffer from the file
+        const fileBuffer = await sponsorLetterFile.arrayBuffer();
+        const fileName = `${registrationId}-${Date.now()}.pdf`;
+        
+        // Upload to Supabase storage
+        const { data: uploadData, error: uploadError } = await supabase
+          .storage
+          .from('sponsor_letters')
+          .upload(fileName, fileBuffer, {
+            contentType: 'application/pdf'
+          });
+          
+        if (uploadError) {
+          console.error("Sponsor letter upload error:", uploadError);
+        } else {
+          console.log("Sponsor letter uploaded successfully:", uploadData.path);
+          
+          // Update registration with sponsor letter URL
+          const { error: updateError } = await supabase
+            .from("registrations")
+            .update({ sponsor_letter_url: uploadData.path })
+            .eq("id", registrationId);
+            
+          if (updateError) {
+            console.error("Error updating registration with sponsor letter URL:", updateError);
+          }
+        }
+      } catch (fileError) {
+        console.error("Error processing sponsor letter file:", fileError);
+      }
+    }
+    
     // Create payment record with the unique amount and ONLY use registration_id
     const paymentData = {
       status: "pending",

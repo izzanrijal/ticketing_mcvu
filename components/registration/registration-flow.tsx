@@ -158,18 +158,36 @@ export function RegistrationFlow() {
           description: "Mohon tunggu sebentar",
         })
 
-        // Buat endpoint API khusus untuk menangani pendaftaran
-        const response = await fetch("/api/register", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            registrationData,
-            registrationNumber,
-            totalAmount,
-          }),
-        })
+        // Handle file upload separately if sponsor payment with letter
+        let formData;
+        let response;
+        
+        if (registrationData.payment_type === "sponsor" && registrationData.sponsor_letter) {
+          // Use FormData for file upload
+          formData = new FormData();
+          formData.append('registrationData', JSON.stringify(registrationData));
+          formData.append('registrationNumber', registrationNumber);
+          formData.append('totalAmount', totalAmount.toString());
+          formData.append('sponsor_letter', registrationData.sponsor_letter);
+          
+          response = await fetch("/api/register", {
+            method: "POST",
+            body: formData,
+          });
+        } else {
+          // Regular JSON request for non-file uploads
+          response = await fetch("/api/register", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              registrationData,
+              registrationNumber,
+              totalAmount,
+            }),
+          });
+        }
 
         if (!response.ok) {
           const errorData = await response.json()
