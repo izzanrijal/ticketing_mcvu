@@ -101,7 +101,7 @@ export function ParticipantDetails({ participants, ticketId, onNext, onBack }: P
     participants.forEach((participant) => {
       initialSelectedWorkshops[participant.id] = participant.workshops || []
       initialAttendSymposium[participant.id] =
-        participant.attendSymposium !== undefined ? participant.attendSymposium : false
+        participant.attendSymposium !== undefined ? participant.attendSymposium : true
     })
 
     setSelectedWorkshops(initialSelectedWorkshops)

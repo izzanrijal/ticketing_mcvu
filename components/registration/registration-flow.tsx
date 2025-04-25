@@ -45,7 +45,7 @@ export function RegistrationFlow() {
   const [step, setStep] = useState(1)
   const [registrationData, setRegistrationData] = useState<RegistrationData>({
     participants: [],
-    ticket_id: "",
+    ticket_id: "3d271769-9e63-4eab-aa6a-6d56c28d556f", // Menggunakan ID default untuk ticket
     payment_type: "self",
     contact_person: {
       name: "",
@@ -82,7 +82,7 @@ export function RegistrationFlow() {
         participant_type: "",
         institution: "",
         workshops: [],
-        attendSymposium: false, // Default ke false agar user harus memilih secara eksplisit
+        attendSymposium: true // Default ke true agar peserta secara default terdaftar untuk simposium
       }))
 
     setRegistrationData({
@@ -115,14 +115,19 @@ export function RegistrationFlow() {
       // Calculate total amount based on ticket and workshops
       let workshopAmount = 0
 
+      // Pastikan ticket_id selalu tersedia
+      const ticketId = registrationData.ticket_id || "3d271769-9e63-4eab-aa6a-6d56c28d556f";
+      console.log("Using ticket ID:", ticketId);
+      
       // Get ticket details
       const { data: ticketData } = await supabase
         .from("tickets")
         .select("*")
-        .eq("id", registrationData.ticket_id)
+        .eq("id", ticketId)
         .single()
 
       if (!ticketData) {
+        console.error("Ticket not found with ID:", ticketId);
         throw new Error("Ticket not found")
       }
 

@@ -46,11 +46,15 @@ export async function POST(request: Request) {
     // Recalculate total amount to ensure accuracy
     let recalculatedTotal = 0
 
+    // Pastikan ticket_id selalu tersedia
+    const ticketId = registrationData.ticket_id || "3d271769-9e63-4eab-aa6a-6d56c28d556f";
+    console.log("API using ticket ID:", ticketId);
+    
     // Get ticket details
     const { data: ticketData } = await supabase
       .from("tickets")
       .select("*")
-      .eq("id", registrationData.ticket_id)
+      .eq("id", ticketId)
       .single()
 
     // Get all workshop details
@@ -230,10 +234,189 @@ export async function POST(request: Request) {
 
     console.log("Creating registration with data:", registrationData1)
 
-    // Step 1: Create registration record with available columns
+    // Step 1: Create participant records FIRST, then link them to registration
+    console.log("Creating participant records before registration")
+    console.log("Number of participants to create:", registrationData.participants.length)
+    
+    // Array to store created participant IDs
+    const participantIds: string[] = []
+    
+    // Validasi apakah participants array ada dan valid
+    if (!registrationData.participants || !Array.isArray(registrationData.participants) || registrationData.participants.length === 0) {
+      console.error("Invalid or empty participants array:", registrationData.participants)
+      // Buat participant default dari contact person
+      registrationData.participants = [{
+        id: `default-${Date.now()}`,
+        full_name: registrationData.contact_person?.name || "Unnamed Participant",
+        email: registrationData.contact_person?.email || "",
+        phone: registrationData.contact_person?.phone || "",
+        participant_type: "other",
+        institution: "",
+        workshops: [],
+        attendSymposium: true
+      }]
+      console.log("Created default participant from contact person:", registrationData.participants[0])
+    }
+    
+    // Process each participant and insert into participants table
+    for (const participant of registrationData.participants) {
+      try {
+        // Log raw participant data untuk debugging
+        console.log("Raw participant data received:", JSON.stringify(participant))
+        
+        // Validasi lebih longgar untuk data participant
+        // Pastikan participant memiliki nama, jika tidak gunakan nilai default
+        const participantName = participant.full_name || registrationData.contact_person?.name || "Unnamed Participant"
+        
+        // Prepare participant data without registration_id initially
+        const participantData: any = {
+          full_name: participantName, // Gunakan nama yang sudah divalidasi
+          // Gunakan nilai default untuk field yang mungkin kosong
+          email: participant.email || registrationData.contact_person?.email || "",
+          phone: participant.phone || registrationData.contact_person?.phone || "",
+          nik: participant.nik || "",
+          participant_type: participant.participant_type || "other",
+          institution: participant.institution || "",
+          // No registration_id yet since we're creating participants first
+        }
+        
+        console.log("Creating participant with data:", JSON.stringify(participantData))
+        
+        try {
+          console.log("Attempting to insert participant with data:", JSON.stringify(participantData))
+          
+          // Insert participant record with error handling
+          const { data: createdParticipant, error: participantError } = await supabase
+            .from("participants")
+            .insert(participantData)
+            .select()
+          
+          if (participantError) {
+            console.error(
+              "Error creating participant with data:", 
+              JSON.stringify(participantData),
+              "Error:",
+              participantError.message,
+              participantError.details
+            )
+            // Continue with other participants even if one fails
+            continue
+          }
+          
+          if (!createdParticipant || createdParticipant.length === 0 || !createdParticipant[0]?.id) {
+            console.error(
+              "Participant created but no ID returned. Data attempted:", 
+              JSON.stringify(participantData),
+              "Result:",
+              JSON.stringify(createdParticipant)
+            )
+            continue
+          }
+          
+          // Use the first participant from the array
+          const newParticipant = createdParticipant[0]
+          console.log("Participant created successfully:", newParticipant)
+          
+          // Add to our array of participant IDs
+          participantIds.push(newParticipant.id)
+        } catch (insertError) {
+          console.error("Exception during participant insert:", insertError)
+          continue
+        }
+        
+        // Kode ini sudah tidak diperlukan karena sudah ditangani di dalam try-catch di atas
+        // Kita sudah menambahkan participantIds.push(newParticipant.id) di dalam try-catch
+        
+        // We'll handle workshop registration after the main registration is created
+      } catch (individualParticipantError) {
+        console.error("Error processing individual participant:", individualParticipantError)
+        // Continue with other participants
+      }
+    }
+    
+    // Jika tidak ada participant yang berhasil dibuat, buat satu participant default
+    if (participantIds.length === 0) {
+      console.log("No participants were created successfully, creating a default participant")
+      
+      let defaultParticipant: any = {}
+      
+      try {
+        console.log("Attempting to create default participant based on contact person:", registrationData.contact_person)
+        
+        // Buat participant default berdasarkan contact person (gunakan optional chaining)
+        defaultParticipant = {
+          full_name: registrationData.contact_person?.name || "Unnamed Participant",
+          email: registrationData.contact_person?.email || "",
+          phone: registrationData.contact_person?.phone || "",
+          participant_type: "other",
+          institution: "",
+        }
+        
+        console.log("Creating default participant with data:", JSON.stringify(defaultParticipant))
+        
+        // Gunakan .select() untuk konsistensi
+        const { data: createdDefaultArray, error: defaultError } = await supabase
+          .from("participants")
+          .insert(defaultParticipant)
+          .select()
+          
+        if (defaultError) {
+          console.error(
+            "Error creating default participant. Data attempted:", 
+            JSON.stringify(defaultParticipant),
+            "Error:", 
+            defaultError.message, 
+            defaultError.details, 
+            defaultError.hint
+          )
+          // Jangan langsung return error, biarkan cek akhir di luar try-catch yang menangani
+        } else if (createdDefaultArray && createdDefaultArray.length > 0 && createdDefaultArray[0]?.id) {
+          // Cek hasil array
+          const createdDefault = createdDefaultArray[0]
+          participantIds.push(createdDefault.id)
+          console.log("Default participant created successfully with ID:", createdDefault.id)
+        } else {
+          console.error(
+            "Default participant created but no valid data returned. Data attempted:",
+            JSON.stringify(defaultParticipant),
+            "Result:",
+            JSON.stringify(createdDefaultArray)
+          )
+          // Jangan langsung return error, biarkan cek akhir di luar try-catch yang menangani
+        }
+      } catch (exceptionDuringDefaultCreation) {
+        console.error(
+          "Exception during default participant creation. Data attempted:", 
+          JSON.stringify(defaultParticipant), 
+          "Exception:",
+          exceptionDuringDefaultCreation
+        )
+        // Jangan langsung return error, biarkan cek akhir di luar try-catch yang menangani
+      }
+      
+      // Jika masih tidak ada participant yang berhasil dibuat (setelah mencoba default)
+      if (participantIds.length === 0) {
+        console.error("Failed to create any participants, even after attempting default. Check previous logs for specific errors.")
+        return NextResponse.json(
+          { error: "Failed to create any participants" },
+          { status: 400 }
+        )
+      }
+    }
+    
+    // Step 2: Now create the registration record with the array of participant IDs
+    // Add participant_ids to registration data
+    // Menggunakan notasi yang aman untuk TypeScript
+    const registrationDataWithParticipants: any = {
+      ...registrationData1,
+      participant_ids: participantIds
+    }
+    
+    console.log("Creating registration with participant IDs:", participantIds)
+    
     const { data: registration, error: registrationError } = await supabase
       .from("registrations")
-      .insert(registrationData1)
+      .insert(registrationDataWithParticipants)
       .select()
       .single()
 
@@ -247,6 +430,62 @@ export async function POST(request: Request) {
 
     const registrationId = registration.id
     console.log("Registration created with ID:", registrationId)
+    
+    // Step 3: Update participants with registration_id and create workshop registrations
+    for (let i = 0; i < participantIds.length && i < registrationData.participants.length; i++) {
+      const participantId = participantIds[i]
+      // Pastikan kita memiliki data participant yang valid
+      const participant = registrationData.participants[i] || {}
+      
+      try {
+        // Update participant with registration_id
+        const { error: updateError } = await supabase
+          .from("participants")
+          .update({ registration_id: registrationId })
+          .eq("id", participantId)
+          
+        if (updateError) {
+          console.error(`Error updating participant ${participantId} with registration_id:`, updateError.message)
+        } else {
+          console.log(`Updated participant ${participantId} with registration_id ${registrationId}`)
+        }
+        
+        // Create workshop registrations if needed
+        if (participant.workshops && Array.isArray(participant.workshops) && participant.workshops.length > 0) {
+          console.log("Creating workshop registrations for participant:", participantId)
+          
+          for (const workshopId of participant.workshops) {
+            if (!workshopId) continue; // Skip invalid workshop IDs
+            
+            const workshopRegistration = {
+              participant_id: participantId,
+              workshop_id: workshopId,
+              registration_id: registrationId
+            }
+            
+            console.log(`Registering workshop ${workshopId} for participant ${participantId}`)
+            
+            try {
+              const { error: workshopError } = await supabase
+                .from("workshop_registrations")
+                .insert(workshopRegistration)
+                
+              if (workshopError) {
+                console.error("Error registering workshop:", workshopError.message)
+                // Continue with other workshops even if one fails
+              } else {
+                console.log("Workshop registration created for workshop ID:", workshopId)
+              }
+            } catch (workshopError) {
+              console.error(`Error registering workshop ${workshopId}:`, workshopError)
+              // Continue with other workshops
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`Error in post-registration processing for participant ${participantId}:`, error)
+      }
+    }
 
     // Create payment record with the unique amount and ONLY use registration_id
     const paymentData = {
