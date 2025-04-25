@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { createBrowserClient } from "@supabase/ssr"
 import { Loader2, AlertCircle } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -17,7 +17,10 @@ export function AdminLoginForm() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [redirecting, setRedirecting] = useState(false)
-  const supabase = createClientComponentClient()
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
 
   // This effect will handle the redirect after successful login
   useEffect(() => {
@@ -84,7 +87,7 @@ export function AdminLoginForm() {
 
       // Show redirect message
       setError("Login successful! Redirecting to dashboard...")
-    } catch (error) {
+    } catch (error: any) {
       console.error("Login error:", error)
       setError(error.message || "An unknown error occurred")
       setLoading(false)

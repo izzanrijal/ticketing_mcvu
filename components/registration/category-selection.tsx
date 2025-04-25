@@ -11,9 +11,13 @@ import { Button } from "@/components/ui/button"
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Skeleton } from "@/components/ui/skeleton"
 
 const formSchema = z.object({
-  ticket_id: z.string().optional(),
+  ticket_id: z.string({
+    required_error: "Pilih jenis tiket",
+  }),
   participant_count: z.coerce
     .number()
     .min(1, {
@@ -100,13 +104,7 @@ export function CategorySelection({ onNext }: CategorySelectionProps) {
       }
     }
 
-    // Pastikan ticket_id selalu ada
-    onNext({
-      ticket_id: data.ticket_id || "3d271769-9e63-4eab-aa6a-6d56c28d556f", // Gunakan ID default jika tidak ada
-      participant_count: data.participant_count,
-      payment_type: data.payment_type,
-      sponsor_letter: data.sponsor_letter,
-    })
+    onNext(data)
   }
 
   return (
@@ -118,6 +116,58 @@ export function CategorySelection({ onNext }: CategorySelectionProps) {
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+          {/* Ticket Type Selection Section */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold">Jenis Tiket</h3>
+            <FormField
+              control={form.control}
+              name="ticket_id"
+              render={({ field }) => (
+                <FormItem className="space-y-3">
+                  <FormControl>
+                    <RadioGroup
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                      className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+                    >
+                      {loading ? (
+                        // Skeletons while loading
+                        Array.from({ length: 3 }).map((_, index) => (
+                          <Skeleton key={index} className="h-24 w-full" />
+                        ))
+                      ) : tickets.length > 0 ? (
+                        tickets.map((ticket) => (
+                          <FormItem key={ticket.id} className="flex items-center space-x-3 space-y-0">
+                            <FormControl>
+                              <Card
+                                className={`w-full cursor-pointer transition-all hover:opacity-90 border ${
+                                  field.value === ticket.id ? "ring-2 ring-primary border-primary" : ""
+                                }`}
+                                onClick={() => field.onChange(ticket.id)}
+                              >
+                                <CardHeader className="p-4">
+                                  <div className="flex items-center justify-between">
+                                    <FormLabel className="font-medium cursor-pointer">{ticket.name}</FormLabel>
+                                    <RadioGroupItem value={ticket.id} className="sr-only" />
+                                  </div>
+                                  <CardDescription className="text-xs">{ticket.description}</CardDescription>
+                                </CardHeader>
+                                {/* Optionally display prices if needed, requires fetching participant types */}
+                              </Card>
+                            </FormControl>
+                          </FormItem>
+                        ))
+                      ) : (
+                        <p className="text-muted-foreground col-span-full">Tidak ada tiket yang tersedia saat ini.</p>
+                      )}
+                    </RadioGroup>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
           {/* Participant Count Section */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Jumlah Peserta</h3>

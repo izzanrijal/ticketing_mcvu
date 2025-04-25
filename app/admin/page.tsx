@@ -1,13 +1,11 @@
-import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
+import { createServerSupabaseClient } from "@/lib/supabase-auth"
 
 import { EnhancedOverview } from "@/components/admin/enhanced-overview"
 import { AdminDashboardLayout } from "@/components/admin/dashboard-layout"
 
 export default async function AdminPage() {
-  const cookieStore = cookies()
-  const supabase = createServerComponentClient({ cookies: () => cookieStore })
+  const supabase = createServerSupabaseClient()
 
   // Get the current user
   const {

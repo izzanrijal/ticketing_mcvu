@@ -1,0 +1,665 @@
+{
+  "tables": [
+    {
+      "name": "registrations",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "isPrimary": true,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "user_id",
+          "type": "uuid",
+          "references": "auth.users(id)"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "default": "now()"
+        },
+        {
+          "name": "status",
+          "type": "text"
+        },
+        {
+          "name": "payment_status",
+          "type": "text"
+        },
+        {
+          "name": "payment_amount",
+          "type": "numeric"
+        },
+        {
+          "name": "payment_unique_code",
+          "type": "numeric"
+        },
+        {
+          "name": "payment_proof_url",
+          "type": "text"
+        },
+        {
+          "name": "sponsor_letter_url",
+          "type": "text"
+        },
+        {
+          "name": "is_sponsor_paid",
+          "type": "boolean",
+          "default": false
+        },
+        {
+          "name": "registration_number",
+          "type": "text"
+        },
+        {
+          "name": "final_amount",
+          "type": "numeric"
+        },
+        {
+          "name": "promo_code",
+          "type": "text"
+        }
+      ],
+      "policies": [
+        {
+          "name": "Users can view their own registrations",
+          "operation": "SELECT",
+          "using": "auth.uid() = user_id"
+        },
+        {
+          "name": "Users can create their own registrations",
+          "operation": "INSERT",
+          "check": "auth.uid() = user_id"
+        },
+        {
+          "name": "Users can update their own registrations",
+          "operation": "UPDATE",
+          "using": "auth.uid() = user_id"
+        },
+        {
+          "name": "Admins can view all registrations",
+          "operation": "SELECT",
+          "using": "is_admin()"
+        },
+        {
+          "name": "Admins can update all registrations",
+          "operation": "UPDATE",
+          "using": "is_admin()"
+        }
+      ]
+    },
+    {
+      "name": "participants",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "isPrimary": true,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "registration_id",
+          "type": "uuid",
+          "references": "public.registrations(id)"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "default": "now()"
+        },
+        {
+          "name": "nik",
+          "type": "text"
+        },
+        {
+          "name": "full_name",
+          "type": "text"
+        },
+        {
+          "name": "email",
+          "type": "text"
+        },
+        {
+          "name": "phone",
+          "type": "text"
+        },
+        {
+          "name": "participant_type",
+          "type": "text"
+        },
+        {
+          "name": "institution",
+          "type": "text"
+        },
+        {
+          "name": "qr_code",
+          "type": "text"
+        },
+        {
+          "name": "is_checked_in",
+          "type": "boolean",
+          "default": false
+        },
+        {
+          "name": "checked_in_at",
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "attend_symposium",
+          "type": "boolean",
+          "default": false
+        }
+      ],
+      "policies": [
+        {
+          "name": "Users can view their own participants",
+          "operation": "SELECT",
+          "using": "is_participant_owner(id)"
+        },
+        {
+          "name": "Users can create participants for their registrations",
+          "operation": "INSERT",
+          "check": "EXISTS (SELECT 1 FROM public.registrations WHERE id = new.registration_id AND user_id = auth.uid())"
+        },
+        {
+          "name": "Users can update their own participants",
+          "operation": "UPDATE",
+          "using": "is_participant_owner(id)"
+        },
+        {
+          "name": "Admins can view all participants",
+          "operation": "SELECT",
+          "using": "is_admin()"
+        },
+        {
+          "name": "Admins can update all participants",
+          "operation": "UPDATE",
+          "using": "is_admin()"
+        }
+      ]
+    },
+    {
+      "name": "workshops",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "isPrimary": true,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "name",
+          "type": "text"
+        },
+        {
+          "name": "description",
+          "type": "text"
+        },
+        {
+          "name": "start_time",
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "end_time",
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "location",
+          "type": "text"
+        },
+        {
+          "name": "max_participants",
+          "type": "integer"
+        },
+        {
+          "name": "price",
+          "type": "numeric"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "default": "now()"
+        }
+      ],
+      "policies": [
+        {
+          "name": "Workshops are viewable by everyone",
+          "operation": "SELECT",
+          "using": "true"
+        },
+        {
+          "name": "Only admins can insert workshops",
+          "operation": "INSERT",
+          "check": "is_admin()"
+        },
+        {
+          "name": "Only admins can update workshops",
+          "operation": "UPDATE",
+          "using": "is_admin()"
+        },
+        {
+          "name": "Only admins can delete workshops",
+          "operation": "DELETE",
+          "using": "is_admin()"
+        }
+      ]
+    },
+    {
+      "name": "participant_workshops",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "isPrimary": true,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "participant_id",
+          "type": "uuid",
+          "references": "public.participants(id)"
+        },
+        {
+          "name": "workshop_id",
+          "type": "uuid",
+          "references": "public.workshops(id)"
+        },
+        {
+          "name": "is_checked_in",
+          "type": "boolean",
+          "default": false
+        },
+        {
+          "name": "checked_in_at",
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "default": "now()"
+        }
+      ],
+      "constraints": [
+        {
+          "type": "UNIQUE",
+          "columns": ["participant_id", "workshop_id"]
+        }
+      ],
+      "policies": [
+        {
+          "name": "Users can view their own workshop registrations",
+          "operation": "SELECT",
+          "using": "EXISTS (SELECT 1 FROM public.participants p JOIN public.registrations r ON p.registration_id = r.id WHERE p.id = participant_id AND r.user_id = auth.uid())"
+        },
+        {
+          "name": "Users can register for workshops",
+          "operation": "INSERT",
+          "check": "EXISTS (SELECT 1 FROM public.participants p JOIN public.registrations r ON p.registration_id = r.id WHERE p.id = new.participant_id AND r.user_id = auth.uid())"
+        },
+        {
+          "name": "Admins can view all workshop registrations",
+          "operation": "SELECT",
+          "using": "is_admin()"
+        },
+        {
+          "name": "Admins can update all workshop registrations",
+          "operation": "UPDATE",
+          "using": "is_admin()"
+        }
+      ]
+    },
+    {
+      "name": "tickets",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "isPrimary": true,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "name",
+          "type": "text"
+        },
+        {
+          "name": "description",
+          "type": "text"
+        },
+        {
+          "name": "price_student",
+          "type": "numeric"
+        },
+        {
+          "name": "price_general",
+          "type": "numeric"
+        },
+        {
+          "name": "price_specialist",
+          "type": "numeric"
+        },
+        {
+          "name": "price_nurse",
+          "type": "numeric"
+        },
+        {
+          "name": "active",
+          "type": "boolean",
+          "default": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "default": "now()"
+        },
+        {
+          "name": "sort_order",
+          "type": "integer",
+          "default": 0
+        }
+      ],
+      "policies": [
+        {
+          "name": "Tickets are viewable by everyone",
+          "operation": "SELECT",
+          "using": "true"
+        },
+        {
+          "name": "Only admins can insert tickets",
+          "operation": "INSERT",
+          "check": "is_admin()"
+        },
+        {
+          "name": "Only admins can update tickets",
+          "operation": "UPDATE",
+          "using": "is_admin()"
+        }
+      ]
+    },
+    {
+      "name": "payments",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "isPrimary": true,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "registration_id",
+          "type": "uuid",
+          "references": "public.registrations(id)"
+        },
+        {
+          "name": "amount",
+          "type": "numeric"
+        },
+        {
+          "name": "unique_code",
+          "type": "numeric"
+        },
+        {
+          "name": "status",
+          "type": "text"
+        },
+        {
+          "name": "payment_proof_url",
+          "type": "text"
+        },
+        {
+          "name": "verified_at",
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "verified_by",
+          "type": "uuid",
+          "references": "auth.users(id)"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "default": "now()"
+        }
+      ],
+      "policies": [
+        {
+          "name": "Users can view their own payments",
+          "operation": "SELECT",
+          "using": "EXISTS (SELECT 1 FROM public.registrations WHERE id = registration_id AND user_id = auth.uid())"
+        },
+        {
+          "name": "Users can create payments for their registrations",
+          "operation": "INSERT",
+          "check": "EXISTS (SELECT 1 FROM public.registrations WHERE id = new.registration_id AND user_id = auth.uid())"
+        },
+        {
+          "name": "Users can update their own payments",
+          "operation": "UPDATE",
+          "using": "EXISTS (SELECT 1 FROM public.registrations WHERE id = registration_id AND user_id = auth.uid())"
+        },
+        {
+          "name": "Admins can view all payments",
+          "operation": "SELECT",
+          "using": "is_admin()"
+        },
+        {
+          "name": "Admins can update all payments",
+          "operation": "UPDATE",
+          "using": "is_admin()"
+        }
+      ]
+    },
+    {
+      "name": "promo_codes",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "isPrimary": true,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "code",
+          "type": "text",
+          "isUnique": true
+        },
+        {
+          "name": "discount_percentage",
+          "type": "numeric"
+        },
+        {
+          "name": "discount_amount",
+          "type": "numeric"
+        },
+        {
+          "name": "max_uses",
+          "type": "integer"
+        },
+        {
+          "name": "used_count",
+          "type": "integer",
+          "default": 0
+        },
+        {
+          "name": "valid_from",
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "valid_until",
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "active",
+          "type": "boolean",
+          "default": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "default": "now()"
+        }
+      ],
+      "policies": [
+        {
+          "name": "Promo codes are viewable by everyone",
+          "operation": "SELECT",
+          "using": "true"
+        },
+        {
+          "name": "Only admins can insert promo codes",
+          "operation": "INSERT",
+          "check": "is_admin()"
+        },
+        {
+          "name": "Only admins can update promo codes",
+          "operation": "UPDATE",
+          "using": "is_admin()"
+        }
+      ]
+    },
+    {
+      "name": "scheduled_tasks",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "isPrimary": true,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "task_type",
+          "type": "text"
+        },
+        {
+          "name": "registration_id",
+          "type": "uuid",
+          "references": "public.registrations(id)"
+        },
+        {
+          "name": "scheduled_at",
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "executed_at",
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "status",
+          "type": "text"
+        },
+        {
+          "name": "result",
+          "type": "jsonb"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "default": "now()"
+        }
+      ],
+      "policies": [
+        {
+          "name": "Only admins can view scheduled tasks",
+          "operation": "SELECT",
+          "using": "is_admin()"
+        },
+        {
+          "name": "System can insert scheduled tasks",
+          "operation": "INSERT",
+          "check": "true"
+        },
+        {
+          "name": "Only admins can update scheduled tasks",
+          "operation": "UPDATE",
+          "using": "is_admin()"
+        }
+      ]
+    }
+  ],
+  "functions": [
+    {
+      "name": "is_admin",
+      "returns": "boolean",
+      "language": "plpgsql",
+      "security": "DEFINER",
+      "definition": "BEGIN\n  RETURN (SELECT is_admin FROM auth.users WHERE id = auth.uid());\nEND;"
+    },
+    {
+      "name": "owns_registration",
+      "parameters": ["registration_id uuid"],
+      "returns": "boolean",
+      "language": "plpgsql",
+      "security": "DEFINER",
+      "definition": "BEGIN\n  RETURN EXISTS (\n    SELECT 1 FROM public.registrations \n    WHERE id = registration_id AND user_id = auth.uid()\n  );\nEND;"
+    },
+    {
+      "name": "is_participant_owner",
+      "parameters": ["participant_id uuid"],
+      "returns": "boolean",
+      "language": "plpgsql",
+      "security": "DEFINER",
+      "definition": "BEGIN\n  RETURN EXISTS (\n    SELECT 1 FROM public.participants p\n    JOIN public.registrations r ON p.registration_id = r.id\n    WHERE p.id = participant_id AND r.user_id = auth.uid()\n  );\nEND;"
+    }
+  ],
+  "storage": {
+    "buckets": [
+      {
+        "name": "payment_proofs",
+        "public": false,
+        "allowedMimeTypes": ["image/jpeg", "image/png", "application/pdf"],
+        "maxFileSize": 5242880
+      },
+      {
+        "name": "sponsor_letters",
+        "public": false,
+        "allowedMimeTypes": ["application/pdf"],
+        "maxFileSize": 3145728
+      },
+      {
+        "name": "public",
+        "public": true,
+        "allowedMimeTypes": ["image/jpeg", "image/png", "image/svg+xml"],
+        "maxFileSize": 2097152
+      }
+    ]
+  }
+}
