@@ -177,32 +177,113 @@ export function AdminParticipants() {
     XLSX.writeFile(wb, fileName);
   };
 
-  async function handleResendEmail(participantId: string, email: string) {
-    // Check if participantId is valid
-    if (!participantId) {
-      console.error("Cannot resend email: Invalid participant ID.");
-      alert("Gagal mengirim ulang email: ID Peserta tidak valid.");
+  // Function to handle resending email
+  const handleResendEmail = async (participantId: string, email: string) => {
+    if (!participantId || !email) {
+      alert("Informasi partisipan tidak lengkap untuk mengirim ulang email.");
       return;
     }
-    setResendingEmail(prev => ({ ...prev, [participantId]: true }))
+
+    // Find the participant's registration ID (needed for fetching full details in edge function)
+    const participant = participants.find(p => p.participant_id === participantId);
+    if (!participant?.registration_id) {
+        alert("Tidak dapat menemukan ID registrasi untuk partisipan ini.");
+        return;
+    }
+    const registrationId = participant.registration_id;
+
+    setResendingEmail(prev => ({ ...prev, [participantId]: true }));
+    console.log(`Resending email for participant ID: ${participantId}, registration ID: ${registrationId}`);
+
     try {
-      const { error } = await supabase.functions.invoke("resend-participant-email", {
-        body: { participantId, email },
-      })
+      // Call the new Edge Function
+      const { error } = await supabase.functions.invoke('resend-verification-email', {
+        body: { participantId: participantId, registrationId: registrationId }
+      });
 
       if (error) {
-        console.error("Error resending email:", error instanceof Error ? error.message : String(error))
-        alert(`Gagal mengirim ulang email: ${error instanceof Error ? error.message : String(error)}`)
-      } else {
-        alert(`Email berhasil dikirim ulang ke ${email}`)
+        throw error;
       }
-    } catch (error) {
-      console.error("Error resending email:", error instanceof Error ? error.message : String(error))
-      alert(`Gagal mengirim ulang email: ${error instanceof Error ? error.message : String(error)}`)
+
+      console.log(`Resend email function invoked successfully for participant: ${participantId}`);
+      alert(`Email konfirmasi berhasil dikirim ulang ke ${email}.`);
+
+    } catch (error: any) {
+      console.error("Error invoking/resending verification email:", error);
+      alert(`Gagal mengirim ulang email ke ${email}: ${error.message || 'Unknown error'}`);
     } finally {
-      setResendingEmail((prev) => ({ ...prev, [participantId]: false }))
+      setResendingEmail(prev => ({ ...prev, [participantId]: false }));
     }
-  }
+  };
+
+  async function handleManualVerification() {
+    if (!selectedParticipant?.registration_number) {
+      alert("Nomor registrasi tidak ditemukan.");
+      return;
+    }
+    // Check status before verifying (using selectedParticipant data)
+    // Allow verification if status is 'pending', 'Pending Verification', or 'Unpaid'
+    if (selectedParticipant.registration_status !== 'pending' && selectedParticipant.registration_status !== 'Pending Verification' && selectedParticipant.registration_status !== 'Unpaid') {
+        alert(`Status registrasi saat ini adalah '${selectedParticipant.registration_status}', tidak dapat diverifikasi manual.`);
+        return;
+    }
+    setIsVerifying(true);
+    console.log(`Attempting manual verification for: ${selectedParticipant.registration_number}`);
+    try {
+      // TODO: Call Supabase Edge Function for verification
+      // Example: await supabase.functions.invoke('manual-verify-registration', { 
+      //   body: { registrationNumber: selectedParticipant.registration_number }
+      // });
+      await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate network delay
+      
+      // If successful:
+      console.log(`Verification successful for: ${selectedParticipant.registration_number}`);
+      
+      // -- START: Call Edge Function to send email --
+      try {
+        console.log(`Attempting to send verification email for participant: ${selectedParticipant.participant_id}`);
+        const { error: emailError } = await supabase.functions.invoke('send-verification-email', {
+          body: { 
+            participantId: selectedParticipant.participant_id, 
+            registrationId: selectedParticipant.registration_id 
+          }
+        });
+
+        if (emailError) {
+          throw emailError; // Throw error to be caught below
+        }
+        
+        console.log(`Verification email function invoked successfully for participant: ${selectedParticipant.participant_id}`);
+        alert(`Registrasi ${selectedParticipant.registration_number} berhasil diverifikasi manual DAN email konfirmasi sedang dikirim.`);
+
+      } catch (emailError: any) {
+        console.error("Error invoking/sending verification email:", emailError);
+        // Notify admin verification succeeded, but email failed
+        alert(`Registrasi ${selectedParticipant.registration_number} berhasil diverifikasi manual, TETAPI GAGAL mengirim email konfirmasi: ${emailError.message || 'Unknown error'}. Harap kirim ulang manual.`);
+      }
+      // -- END: Call Edge Function --
+
+      // Update local state (optimistic update)
+      setParticipants(prev => prev.map(p => 
+        p.registration_number === selectedParticipant.registration_number
+          ? { ...p, registration_status: 'Verified' } // Update status locally
+          : p
+      ));
+      setShowManualVerifyModal(false); // Close modal
+
+    } catch (error: any) {
+      console.error("Error during manual verification:", error);
+      alert(`Gagal melakukan verifikasi manual: ${error.message || 'Unknown error'}`);
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  // Function to format currency (Example)
+  const formatCurrency = (amount: number | null | undefined) => {
+    if (amount === null || amount === undefined) return 'N/A';
+    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(amount);
+  };
 
   // Fetch order details when the manual verification modal opens
   useEffect(() => {
@@ -247,50 +328,6 @@ export function AdminParticipants() {
       fetchDetails();
     }
   }, [showManualVerifyModal, selectedParticipant, supabase]);
-
-  // Placeholder for the actual verification logic
-  const handleManualVerification = async () => {
-    if (!selectedParticipant?.registration_number) {
-      alert("Nomor registrasi tidak ditemukan.");
-      return;
-    }
-    // Check status before verifying (using selectedParticipant data)
-    if (selectedParticipant.registration_status !== 'Pending Verification' && selectedParticipant.registration_status !== 'Unpaid') {
-        alert(`Status registrasi saat ini adalah '${selectedParticipant.registration_status}', tidak dapat diverifikasi manual.`);
-        return;
-    }
-    setIsVerifying(true);
-    console.log(`Attempting manual verification for: ${selectedParticipant.registration_number}`);
-    try {
-      // TODO: Call Supabase Edge Function for verification
-      // Example: await supabase.functions.invoke('manual-verify-registration', { 
-      //   body: { registrationNumber: selectedParticipant.registration_number }
-      // });
-      await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate network delay
-      
-      // If successful:
-      alert(`Registrasi ${selectedParticipant.registration_number} berhasil diverifikasi manual.`);
-      // Update local state (optimistic update or re-fetch)
-      setParticipants(prev => prev.map(p => 
-        p.registration_number === selectedParticipant.registration_number
-          ? { ...p, registration_status: 'Verified' } // Update status locally
-          : p
-      ));
-      setShowManualVerifyModal(false); // Close modal
-
-    } catch (error: any) {
-      console.error("Error during manual verification:", error);
-      alert(`Gagal melakukan verifikasi manual: ${error.message || 'Unknown error'}`);
-    } finally {
-      setIsVerifying(false);
-    }
-  };
-
-  // Function to format currency (Example)
-  const formatCurrency = (amount: number | null | undefined) => {
-    if (amount === null || amount === undefined) return 'N/A';
-    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(amount);
-  };
 
   return (
     <div className="space-y-4">
