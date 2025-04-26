@@ -19,17 +19,56 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Payment ID and Registration ID are required" }, { status: 400 })
     }
 
+    // Check if payment exists, if not create it
+    const { data: existingPayment, error: checkPaymentError } = await supabase
+      .from("payments")
+      .select("*")
+      .eq("id", paymentId)
+      .single()
+
+    if (checkPaymentError && checkPaymentError.code === "PGRST116") {
+      // Payment not found, create a new one
+      console.log("Payment not found, creating a new payment record")
+      const { data: newPayment, error: createPaymentError } = await supabase
+        .from("payments")
+        .insert({
+          id: paymentId,
+          registration_id: registrationId,
+          status: "verified",
+          verified_at: new Date().toISOString(),
+          notes: notes || "Manually verified by admin",
+          payment_method: "manual",
+          amount: 0, // Will be updated with registration amount
+        })
+        .select()
+
+      if (createPaymentError) throw createPaymentError
+    } else if (checkPaymentError) {
+      throw checkPaymentError
+    }
+
     // Update payment status
     const { error: paymentError } = await supabase
       .from("payments")
       .update({
         status: "verified",
         verified_at: new Date().toISOString(),
-        verification_notes: notes || "Manually verified by admin",
+        notes: notes || "Manually verified by admin",
       })
       .eq("id", paymentId)
 
     if (paymentError) throw paymentError
+      
+    // Update registration status to paid
+    const { error: updateRegistrationError } = await supabase
+      .from("registrations")
+      .update({
+        status: "paid",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", registrationId)
+
+    if (updateRegistrationError) throw updateRegistrationError
 
     // If transaction ID is provided, update it
     if (transactionId) {
@@ -46,7 +85,7 @@ export async function POST(req: NextRequest) {
       if (transactionError) throw transactionError
     }
 
-    // Get registration details
+    // Get registration details with amount to update payment if needed
     const { data: registration, error: registrationError } = await supabase
       .from("registrations")
       .select(`
@@ -57,6 +96,18 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (registrationError) throw registrationError
+
+    // Update payment amount if it's 0
+    if (existingPayment?.amount === 0 || !existingPayment?.amount) {
+      const { error: updatePaymentAmountError } = await supabase
+        .from("payments")
+        .update({
+          amount: registration.final_amount || registration.total_amount,
+        })
+        .eq("id", paymentId)
+
+      if (updatePaymentAmountError) throw updatePaymentAmountError
+    }
 
     // --- Debugging Email --- 
     console.log("Preparing to send payment confirmation email for registration:", registration?.id);
@@ -75,6 +126,7 @@ export async function POST(req: NextRequest) {
       message: "Payment verified successfully",
       payment_id: paymentId,
       registration_id: registrationId,
+      registration_status: "paid",
       email_result: emailResult,
     })
   } catch (error: unknown) {
