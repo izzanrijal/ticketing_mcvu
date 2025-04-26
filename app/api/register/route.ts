@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { schedulePaymentCheck } from "@/lib/payment-check-scheduler"
+// TODO: Implement this function in a separate module (e.g., lib/notifications.ts)
+import { sendRegistrationInvoice } from "@/lib/notifications"
 
 export async function POST(request: Request) {
   try {
@@ -411,7 +413,8 @@ export async function POST(request: Request) {
     // Menggunakan notasi yang aman untuk TypeScript
     const registrationDataWithParticipants: any = {
       ...registrationData1,
-      participant_ids: participantIds
+      participant_ids: participantIds,
+      ticket_id: registrationData1.ticket_id // Add ticket_id here
     }
     
     console.log("Creating registration with participant IDs:", participantIds)
@@ -590,11 +593,36 @@ export async function POST(request: Request) {
 
     if (paymentError) {
       console.error("Payment error:", paymentError)
-      // Log but continue since registration was successful
+      return NextResponse.json(
+        { error: "Failed to create payment: " + paymentError.message },
+        { status: 500 }
+      )
     } else {
       // Schedule payment check for this registration
       // This will start a timer to check for payment every 5 minutes
       await schedulePaymentCheck(registrationId)
+    }
+
+    // Send registration invoice email asynchronously
+    if (registrationData.contact_person && registrationData.contact_person.email) {
+      // Fire-and-forget: Don't await this promise
+      const registrationCreationTime = new Date(); // Use current time as proxy for creation time
+      sendRegistrationInvoice(
+        registrationId, 
+        registrationNumber, // Pass the human-readable number
+        registrationCreationTime, // Pass the creation timestamp
+        registrationData.contact_person, 
+        uniqueFinalAmount, 
+        finalAmount, // original amount before unique deduction
+        uniqueDeduction,
+        registrationData // Pass necessary details for the invoice
+      ).catch(emailError => {
+        // Log error if sending email fails, but don't block response
+        console.error(`Error sending registration invoice for ${registrationId}:`, emailError);
+      });
+      console.log(`Initiated async invoice email send for registration ${registrationId} to ${registrationData.contact_person.email}`);
+    } else {
+      console.warn(`No contact person email found for registration ${registrationId}, skipping invoice email.`);
     }
 
     return NextResponse.json({

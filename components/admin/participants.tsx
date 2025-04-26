@@ -3,125 +3,108 @@
 import { useEffect, useState } from "react"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { Download, Search } from "lucide-react"
+import * as XLSX from 'xlsx';
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-// Import the Badge component at the top of the file
 import { Badge } from "@/components/ui/badge"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+
+interface ParticipantData {
+  participant_id: string;
+  registration_id: string | null;
+  registration_number: string | null;
+  registration_date: string | null;
+  final_amount: number | null;
+  promo_code_id: string | null;
+  registration_status: string | null; // Status from registrations table
+  created_at: string | null; // Participant creation date
+  full_name: string | null;
+  email: string | null;
+  phone: string | null;
+  participant_type: string | null;
+  institution: string | null;
+  nik: string | null;
+  qr_code_id: string | null;
+  payment_note: string | null; // Note from payments table
+}
 
 export function AdminParticipants() {
-  const [participants, setParticipants] = useState<any[]>([])
+  const [participants, setParticipants] = useState<ParticipantData[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [participantType, setParticipantType] = useState("all")
   const [resendingEmail, setResendingEmail] = useState<{ [key: string]: boolean }>({})
+  const [showManualVerifyModal, setShowManualVerifyModal] = useState(false);
+  const [showResendEmailModal, setShowResendEmailModal] = useState(false);
+  const [selectedParticipant, setSelectedParticipant] = useState<ParticipantData | null>(null);
+  // State for Manual Verification Modal
+  const [orderDetails, setOrderDetails] = useState<any | null>(null); // Replace 'any' with a proper type later
+  const [isFetchingDetails, setIsFetchingDetails] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [isVerifying, setIsVerifying] = useState(false); // For verification loading state
+
   const supabase = createClientComponentClient()
 
   useEffect(() => {
     async function fetchParticipants() {
       setLoading(true)
       try {
-        // Use the registration_summary view to get participants with their registration data
+        // Fetch data directly from the registration_summary view
         let query = supabase
-          .from('registration_summary')
-          .select('*')
-          .order('created_at', { ascending: false })
-        
-        // Apply filters if needed
-        if (participantType !== "all") {
-          query = query.eq('participant_type', participantType)
-        }
-        
-        if (searchQuery) {
-          query = query.or(
-            `full_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`
-          )
-        }
-        
-        const { data, error } = await query
-        
-        if (error) {
-          console.error("Error fetching participant data:", error)
-          throw error
-        }
-        
-        console.log("Participant data from view:", JSON.stringify(data, null, 2))
-        
-        // Transform the data to match the expected format
-        // Filter out entries where participant_id is null
-        const enrichedParticipants = (data || [])
-          .filter(item => item.participant_id !== null)
-          .map(item => ({
-            id: item.participant_id,
-            full_name: item.full_name,
-            email: item.email || '',
-            phone: item.phone || '',
-            participant_type: item.participant_type || 'other',
-            institution: item.institution || '',
-            created_at: item.created_at,
-            registration_id: item.registration_id,
-            registration: {
-              id: item.registration_id,
-              registration_number: item.registration_number || "Belum Terdaftar"
-            }
-          }))
-        
-        console.log('Enriched participants:', enrichedParticipants)
-        setParticipants(enrichedParticipants)
-      } catch (error) {
-        console.error("Error in fetchParticipants:", error)
-        
-        // Fallback to the original method if the view doesn't exist or there's an error
-        try {
-          console.log("Falling back to original method...")
-          // Fetch participants directly
-          let { data: participantsData, error: participantsError } = await supabase
-            .from('participants')
-            .select('*')
-            .order('created_at', { ascending: false })
-            
-          if (participantsError) {
-            console.error("Error fetching participants:", participantsError)
-            throw participantsError
-          }
-          
-          // Handle filtering
-          let filteredParticipants = participantsData || []
-          
-          if (participantType !== "all") {
-            filteredParticipants = filteredParticipants.filter(p => p.participant_type === participantType)
-          }
+          .from('registration_summary') // Use the view
+          .select('*') // Select all columns from the view
+          .order('registration_date', { ascending: false }); // Order by registration date
 
-          if (searchQuery) {
-            filteredParticipants = filteredParticipants.filter(p => 
-              p.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-              p.email?.toLowerCase().includes(searchQuery.toLowerCase())
-            )
-          }
-          
-          // Set participants without registration data
-          const simpleParticipants = filteredParticipants.map(participant => ({
-            ...participant,
-            registration: {
-              id: null,
-              registration_number: "Belum Terdaftar"
-            }
-          }))
-          
-          setParticipants(simpleParticipants)
-        } catch (fallbackError) {
-          console.error("Error in fallback method:", fallbackError)
-          setParticipants([])
+        // Apply filters if needed
+        // Note: Filtering might need adjustment based on joined data structure
+        // if (participantType !== "all") {
+        //   query = query.eq('participant_type', participantType)
+        // }
+
+        if (searchQuery) {
+          // Filter on columns available in the view
+          query = query.or(
+            `full_name.ilike.%${searchQuery}%,
+            email.ilike.%${searchQuery}%,
+            nik.ilike.%${searchQuery}%,
+            registration_number.ilike.%${searchQuery}%,
+            phone.ilike.%${searchQuery}%`
+          );
         }
+
+        const { data, error } = await query;
+
+        if (error) {
+          console.error("Error fetching participant data from view:", error);
+          throw error;
+        }
+
+        // Data from the view should already be in the desired flat structure
+        const viewData = (data || []) as ParticipantData[];
+
+        // console.log('Data from view:', viewData);
+        setParticipants(viewData.filter(p => p.participant_id !== null)); // Basic filter
+
+      } catch (error) {
+        console.error("Error in fetchParticipants:", error);
+        setParticipants([]); // Clear participants on error
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
     }
 
     fetchParticipants()
-  }, [supabase, searchQuery, participantType])
+  }, [supabase, searchQuery])
 
   function getParticipantTypeLabel(type: string) {
     switch (type) {
@@ -146,57 +129,63 @@ export function AdminParticipants() {
     })
   }
 
-  const exportToCSV = () => {
-    if (participants.length === 0) return
+  const exportToExcel = () => {
+    if (participants.length === 0) {
+      alert("Tidak ada data untuk diekspor.");
+      return;
+    }
 
-    // Create CSV content
+    // Define headers matching the table columns
     const headers = [
+      "No. Registrasi",
+      "QR Code ID",
       "Nama",
+      "NIK",
       "Email",
       "Telepon",
-      "Tipe Peserta",
       "Institusi",
-      "Alamat",
-      "Kota",
-      "Provinsi",
-      "Kode Pos",
-      "Tanggal Daftar",
-    ]
+      "Status Registrasi",
+      "Catatan Pembayaran", // Added notes header
+      "Tipe Peserta", // Add back participant type if needed
+      "Tanggal Registrasi" // Add registration date if needed
+    ];
 
-    const csvContent = [
-      headers.join(","),
-      ...participants.map((p) =>
-        [
-          `"${p.full_name}"`,
-          `"${p.email}"`,
-          `"${p.phone}"`,
-          `"${getParticipantTypeLabel(p.participant_type)}"`,
-          `"${p.institution}"`,
-          `"${p.address}"`,
-          `"${p.city}"`,
-          `"${p.province}"`,
-          `"${p.postal_code}"`,
-          `"${formatDate(p.created_at)}"`,
-        ].join(","),
-      ),
-    ].join("\n")
+    // Map participants data from the view
+    const dataToExport = participants.map(p => [
+      p.registration_number ?? 'N/A',
+      p.qr_code_id ?? 'N/A',
+      p.full_name ?? 'N/A',
+      p.nik ?? 'N/A',
+      p.email ?? 'N/A',
+      p.phone ?? 'N/A',
+      p.institution ?? 'N/A',
+      p.registration_status ?? 'N/A',
+      p.payment_note ?? '-', // Use payment_note
+      p.participant_type ?? 'N/A', // Add participant_type if needed
+      p.registration_date ? new Date(p.registration_date).toLocaleDateString('id-ID') : 'N/A' // Format date
+    ]);
 
-    // Create and download the CSV file
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement("a")
-    link.setAttribute("href", url)
-    link.setAttribute("download", `peserta-mcvu-2025-${new Date().toISOString().split("T")[0]}.csv`)
-    link.style.visibility = "hidden"
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-  }
+    // Create worksheet
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...dataToExport]);
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Peserta");
+
+    const date = new Date().toISOString().split('T')[0];
+    const fileName = `participants_${date}.xlsx`;
+
+    XLSX.writeFile(wb, fileName);
+  };
 
   async function handleResendEmail(participantId: string, email: string) {
+    // Check if participantId is valid
+    if (!participantId) {
+      console.error("Cannot resend email: Invalid participant ID.");
+      alert("Gagal mengirim ulang email: ID Peserta tidak valid.");
+      return;
+    }
+    setResendingEmail(prev => ({ ...prev, [participantId]: true }))
     try {
-      setResendingEmail((prev) => ({ ...prev, [participantId]: true }))
-
       const { error } = await supabase.functions.invoke("resend-participant-email", {
         body: { participantId, email },
       })
@@ -205,7 +194,6 @@ export function AdminParticipants() {
         console.error("Error resending email:", error instanceof Error ? error.message : String(error))
         alert(`Gagal mengirim ulang email: ${error instanceof Error ? error.message : String(error)}`)
       } else {
-        // Show success toast or message
         alert(`Email berhasil dikirim ulang ke ${email}`)
       }
     } catch (error) {
@@ -215,6 +203,94 @@ export function AdminParticipants() {
       setResendingEmail((prev) => ({ ...prev, [participantId]: false }))
     }
   }
+
+  // Fetch order details when the manual verification modal opens
+  useEffect(() => {
+    if (showManualVerifyModal && selectedParticipant?.registration_number) {
+      const fetchDetails = async () => {
+        setIsFetchingDetails(true);
+        setFetchError(null);
+        setOrderDetails(null); // Clear previous details
+        console.log(`Fetching details for reg number: ${selectedParticipant.registration_number}`);
+        try {
+          // Placeholder: Replace with actual Supabase query or function call
+          // This query needs to get registration(s), participant(s), workshop(s), pricing details
+          // based on the registration_number.
+          // Example structure of expected data:
+          await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate network delay
+          const mockDetails = {
+            registrationNumber: selectedParticipant.registration_number,
+            participants: [selectedParticipant.full_name], // Fetch all participants with this reg number
+            items: [
+              { name: 'Symposium Access', price: 1000000 },
+              { name: 'Workshop A', price: 500000 }
+            ],
+            totalAmount: 1500000, 
+            // Add other relevant details: payment method, status etc.
+          };
+          setOrderDetails(mockDetails);
+
+          // TODO: Replace with actual Supabase call, e.g.:
+          // const { data, error } = await supabase.rpc('get_registration_details', { 
+          //   registration_number_input: selectedParticipant.registration_number 
+          // });
+          // if (error) throw error;
+          // setOrderDetails(data);
+
+        } catch (error: any) {
+          console.error("Error fetching order details:", error);
+          setFetchError("Gagal memuat detail pesanan.");
+        } finally {
+          setIsFetchingDetails(false);
+        }
+      };
+      fetchDetails();
+    }
+  }, [showManualVerifyModal, selectedParticipant, supabase]);
+
+  // Placeholder for the actual verification logic
+  const handleManualVerification = async () => {
+    if (!selectedParticipant?.registration_number) {
+      alert("Nomor registrasi tidak ditemukan.");
+      return;
+    }
+    // Check status before verifying (using selectedParticipant data)
+    if (selectedParticipant.registration_status !== 'Pending Verification' && selectedParticipant.registration_status !== 'Unpaid') {
+        alert(`Status registrasi saat ini adalah '${selectedParticipant.registration_status}', tidak dapat diverifikasi manual.`);
+        return;
+    }
+    setIsVerifying(true);
+    console.log(`Attempting manual verification for: ${selectedParticipant.registration_number}`);
+    try {
+      // TODO: Call Supabase Edge Function for verification
+      // Example: await supabase.functions.invoke('manual-verify-registration', { 
+      //   body: { registrationNumber: selectedParticipant.registration_number }
+      // });
+      await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate network delay
+      
+      // If successful:
+      alert(`Registrasi ${selectedParticipant.registration_number} berhasil diverifikasi manual.`);
+      // Update local state (optimistic update or re-fetch)
+      setParticipants(prev => prev.map(p => 
+        p.registration_number === selectedParticipant.registration_number
+          ? { ...p, registration_status: 'Verified' } // Update status locally
+          : p
+      ));
+      setShowManualVerifyModal(false); // Close modal
+
+    } catch (error: any) {
+      console.error("Error during manual verification:", error);
+      alert(`Gagal melakukan verifikasi manual: ${error.message || 'Unknown error'}`);
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  // Function to format currency (Example)
+  const formatCurrency = (amount: number | null | undefined) => {
+    if (amount === null || amount === undefined) return 'N/A';
+    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(amount);
+  };
 
   return (
     <div className="space-y-4">
@@ -244,7 +320,7 @@ export function AdminParticipants() {
               <SelectItem value="other">Lainnya</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" size="icon" onClick={exportToCSV} disabled={participants.length === 0}>
+          <Button variant="outline" size="icon" onClick={exportToExcel} disabled={participants.length === 0}>
             <Download className="h-4 w-4" />
           </Button>
         </div>
@@ -254,87 +330,170 @@ export function AdminParticipants() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Nomor Registrasi</TableHead>
+              <TableHead>No. Registrasi</TableHead>
+              <TableHead>QR Code ID</TableHead>
               <TableHead>Nama</TableHead>
+              <TableHead>NIK</TableHead>
               <TableHead>Email</TableHead>
               <TableHead>Telepon</TableHead>
-              <TableHead>Tipe</TableHead>
               <TableHead>Institusi</TableHead>
-              <TableHead>Tanggal Daftar</TableHead>
-              <TableHead>Status Pembayaran</TableHead>
-              <TableHead>Aksi</TableHead>
+              <TableHead>Status Registrasi</TableHead>
+              <TableHead>Catatan Pembayaran</TableHead>
+              <TableHead className="text-right">Aksi</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               [...Array(5)].map((_, i) => (
                 <TableRow key={i}>
-                  <TableCell colSpan={9} className="h-12 animate-pulse bg-muted"></TableCell>
+                  <TableCell colSpan={10} className="h-12 animate-pulse bg-muted"></TableCell>
                 </TableRow>
               ))
             ) : participants.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="h-24 text-center">
+                <TableCell colSpan={10} className="h-24 text-center">
                   Tidak ada data peserta
                 </TableCell>
               </TableRow>
             ) : (
-              participants.map((participant) => {
-                // Access the registration data from our enriched object
-                const registration = participant.registration || {}
-                const registrationNumber = registration.registration_number || "N/A"
+              participants.map((p) => {
+                // Log the status for debugging
+                console.log(`Participant: ${p.full_name}, Status: '${p.registration_status}'`); 
                 
-                // Use a dynamically determined status based on participant data
-                // This is a placeholder until we can properly join with payments table
-                let paymentStatus = participant.registration_id ? 'pending' as const : 'N/A' as const
+                // Determine badge variant based on status
+                const badgeVariant = p.registration_status === 'verified' 
+                  ? 'success' 
+                  : (p.registration_status === 'pending' || p.registration_status === 'pending verification' 
+                      ? 'secondary' 
+                      : 'destructive');
 
                 return (
-                  <TableRow key={participant.id}>
-                    <TableCell>{registrationNumber}</TableCell>
-                    <TableCell className="font-medium">{participant.full_name}</TableCell>
-                    <TableCell>{participant.email}</TableCell>
-                    <TableCell>{participant.phone}</TableCell>
-                    <TableCell>{getParticipantTypeLabel(participant.participant_type)}</TableCell>
-                    <TableCell>{participant.institution}</TableCell>
-                    <TableCell>{formatDate(participant.created_at)}</TableCell>
+                  <TableRow key={p.registration_id || p.participant_id}>
+                    <TableCell>{p.registration_number ?? 'N/A'}</TableCell>
+                    <TableCell>{p.qr_code_id ?? 'N/A'}</TableCell>
+                    <TableCell>{p.full_name ?? 'N/A'}</TableCell>
+                    <TableCell>{p.nik ?? 'N/A'}</TableCell>
+                    <TableCell>{p.email ?? 'N/A'}</TableCell>
+                    <TableCell>{p.phone ?? 'N/A'}</TableCell>
+                    <TableCell>{p.institution ?? 'N/A'}</TableCell>
                     <TableCell>
-                      {(() => {
-                        // Using an IIFE to handle the payment status display
-                        // This avoids TypeScript narrowing issues with the conditional rendering
-                        if (paymentStatus === "pending") {
-                          return (
-                            <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">
-                              Menunggu Pembayaran
-                            </Badge>
-                          );
-                        } else if (paymentStatus === "N/A") {
-                          return (
-                            <Badge className="bg-gray-100 text-gray-800 hover:bg-gray-100">
-                              Belum Terdaftar
-                            </Badge>
-                          );
-                        } else {
-                          // This branch should never be reached with current implementation
-                          // But keeping it for future extension
-                          return (
-                            <Badge className="bg-gray-100 text-gray-800 hover:bg-gray-100">
-                              {paymentStatus}
-                            </Badge>
-                          );
-                        }
-                      })()}
+                      <Badge variant={badgeVariant}>
+                        {p.registration_status ?? 'N/A'}
+                      </Badge>
                     </TableCell>
-                    <TableCell>
-                      {/* Only show resend button for verified payments in the future */}
-                      <span className="text-gray-400 text-sm">-</span>
-                    </TableCell>
+                    <TableCell>{p.payment_note ?? '-'}</TableCell>
+                    <TableCell className="text-right">{
+                      /* Check status strictly for button rendering */
+                      (p.registration_status === 'pending' || p.registration_status === 'pending verification') ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedParticipant(p);
+                            setShowManualVerifyModal(true);
+                          }}
+                          disabled={isVerifying}
+                        >
+                          Verifikasi Manual
+                        </Button>
+                      ) : p.registration_status === 'verified' ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleResendEmail(p.participant_id!, p.email!)}
+                          disabled={resendingEmail[p.participant_id!]}
+                        >
+                          {resendingEmail[p.participant_id!] ? "Mengirim..." : "Kirim Ulang Email"}
+                        </Button>
+                      ) : (
+                        <span>-</span> // Default case
+                      )
+                    }</TableCell>
                   </TableRow>
-                )
+                );
               })
             )}
           </TableBody>
         </Table>
       </div>
+
+      {/* Manual Verification Modal */}
+      <Dialog open={showManualVerifyModal} onOpenChange={setShowManualVerifyModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Verifikasi Pembayaran Manual</DialogTitle>
+            <DialogDescription>
+              Verifikasi pembayaran untuk peserta: <strong>{selectedParticipant?.full_name ?? ''}</strong> 
+              (Reg: {selectedParticipant?.registration_number ?? 'N/A'}).
+              {/* TODO: Fetch and display order details here */}
+            </DialogDescription>
+          </DialogHeader>
+          {/* Placeholder for order details */}
+          <div className="my-4 p-4 border rounded bg-muted/40 min-h-[150px]">
+            {isFetchingDetails ? (
+              <p className="text-sm text-center text-muted-foreground">Memuat detail pesanan...</p>
+            ) : fetchError ? (
+              <p className="text-sm text-center text-red-600">{fetchError}</p>
+            ) : orderDetails ? (
+              <div className="text-sm space-y-2">
+                <p><strong>No. Registrasi:</strong> {orderDetails.registrationNumber}</p>
+                <p><strong>Peserta Terkait:</strong> {orderDetails.participants.join(', ')}</p>
+                <div><strong>Item Pesanan:</strong>
+                  <ul className="list-disc pl-5 mt-1">
+                    {orderDetails.items.map((item: any, index: number) => (
+                      <li key={index}>{item.name} ({formatCurrency(item.price)})</li>
+                    ))}
+                  </ul>
+                </div>
+                <p className="font-semibold"><strong>Total Tagihan:</strong> {formatCurrency(orderDetails.totalAmount)}</p>
+                {/* Add more details as needed */}
+              </div>
+            ) : (
+              <p className="text-sm text-center text-muted-foreground">Detail pesanan akan muncul di sini.</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowManualVerifyModal(false)} disabled={isVerifying}>Batal</Button>
+            <Button 
+              onClick={handleManualVerification} 
+              disabled={isFetchingDetails || !orderDetails || isVerifying}
+            >
+              {isVerifying ? "Memverifikasi..." : "Konfirmasi Verifikasi"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Resend Email Modal */}
+      <Dialog open={showResendEmailModal} onOpenChange={setShowResendEmailModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Kirim Ulang Email Tiket</DialogTitle>
+            <DialogDescription>
+              Apakah Anda yakin ingin mengirim ulang email tiket ke peserta: <strong>{selectedParticipant?.full_name ?? ''}</strong> ({selectedParticipant?.email ?? 'N/A'})?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowResendEmailModal(false)}>Batal</Button>
+            <Button 
+              onClick={() => {
+                // Use participant_id for resend logic, email from view data
+                if (selectedParticipant?.participant_id && selectedParticipant?.email) {
+                  console.log("Confirm Resend Email for:", selectedParticipant.participant_id);
+                  handleResendEmail(selectedParticipant.participant_id, selectedParticipant.email);
+                } else {
+                  console.error("Missing participant ID or email for resend");
+                }
+                setShowResendEmailModal(false); // Close modal after action
+              }}
+              // Add loading/disabled state during email resend
+            >
+              Kirim Ulang
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   )
 }

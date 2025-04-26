@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import React from 'react';
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -122,7 +123,7 @@ export function AdminRecentRegistrations() {
       case "pending":
         return <Badge variant="outline">Menunggu</Badge>
       case "verified":
-        return <Badge variant="success">Terverifikasi</Badge>
+        return <Badge variant="secondary">Terverifikasi</Badge>
       case "rejected":
         return <Badge variant="destructive">Ditolak</Badge>
       default:
@@ -179,9 +180,9 @@ export function AdminRecentRegistrations() {
               </TableCell>
             </TableRow>
           ) : (
-            registrations.map((registration) => {
-              return (
-                <TableRow key={registration.id}>
+            registrations.map((registration, index) => (
+              <React.Fragment key={`${registration.id}-${index}`}>
+                <TableRow>
                   <TableCell className="font-medium">{registration.registration_number}</TableCell>
                   <TableCell>
                     {registration.participant?.full_name || "N/A"}
@@ -201,8 +202,8 @@ export function AdminRecentRegistrations() {
                     </Button>
                   </TableCell>
                 </TableRow>
-              )
-            })
+              </React.Fragment>
+            ))
           )}
         </TableBody>
       </Table>
