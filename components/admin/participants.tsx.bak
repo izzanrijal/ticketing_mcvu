@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState } from "react"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { Download, Search } from "lucide-react"
 import * as XLSX from 'xlsx';
@@ -18,7 +18,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { toast } from "@/components/ui/use-toast"
 
 interface ParticipantData {
   participant_id: string;
@@ -56,54 +55,56 @@ export function AdminParticipants() {
 
   const supabase = createClientComponentClient()
 
-  // Define fetchParticipants using useCallback outside useEffect
-  const fetchParticipants = useCallback(async () => {
-    setLoading(true)
-    try {
-      // Fetch data directly from the registration_summary view
-      let query = supabase
-        .from('registration_summary') // Use the view
-        .select('*') // Select all columns from the view
-        .order('registration_date', { ascending: false }); // Order by registration date
-
-      // Apply filters if needed
-      // Note: Filtering might need adjustment based on joined data structure
-      // if (participantType !== "all") {
-      //   query = query.eq('participant_type', participantType)
-      // }
-
-      if (searchQuery) {
-        // Filter on columns available in the view
-        query = query.or(
-          `full_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%,nik.ilike.%${searchQuery}%,registration_number.ilike.%${searchQuery}%,phone.ilike.%${searchQuery}%`
-        );
-      }
-
-      const { data, error } = await query;
-
-      if (error) {
-        console.error("Error fetching participant data from view:", error);
-        throw error;
-      }
-
-      // Data from the view should already be in the desired flat structure
-      const viewData = (data || []) as ParticipantData[];
-
-      // console.log('Data from view:', viewData);
-      setParticipants(viewData.filter(p => p.participant_id !== null)); // Basic filter
-
-    } catch (error) {
-      console.error("Error in fetchParticipants:", error);
-      setParticipants([]); // Clear participants on error
-    } finally {
-      setLoading(false);
-    }
-  }, [supabase, searchQuery]); // Add dependencies
-
-  // useEffect for initial data fetching
   useEffect(() => {
-    fetchParticipants(); // Call the useCallback version
-  }, [fetchParticipants]); // Add fetchParticipants to dependency array
+    async function fetchParticipants() {
+      setLoading(true)
+      try {
+        // Fetch data directly from the registration_summary view
+        let query = supabase
+          .from('registration_summary') // Use the view
+          .select('*') // Select all columns from the view
+          .order('registration_date', { ascending: false }); // Order by registration date
+
+        // Apply filters if needed
+        // Note: Filtering might need adjustment based on joined data structure
+        // if (participantType !== "all") {
+        //   query = query.eq('participant_type', participantType)
+        // }
+
+        if (searchQuery) {
+          // Filter on columns available in the view
+          query = query.or(
+            `full_name.ilike.%${searchQuery}%,
+            email.ilike.%${searchQuery}%,
+            nik.ilike.%${searchQuery}%,
+            registration_number.ilike.%${searchQuery}%,
+            phone.ilike.%${searchQuery}%`
+          );
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+          console.error("Error fetching participant data from view:", error);
+          throw error;
+        }
+
+        // Data from the view should already be in the desired flat structure
+        const viewData = (data || []) as ParticipantData[];
+
+        // console.log('Data from view:', viewData);
+        setParticipants(viewData.filter(p => p.participant_id !== null)); // Basic filter
+
+      } catch (error) {
+        console.error("Error in fetchParticipants:", error);
+        setParticipants([]); // Clear participants on error
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchParticipants()
+  }, [supabase, searchQuery])
 
   function getParticipantTypeLabel(type: string) {
     switch (type) {
@@ -217,115 +218,266 @@ export function AdminParticipants() {
 
   async function handleManualVerification() {
     if (!selectedParticipant?.registration_number || !selectedParticipant?.registration_id) {
-      toast({ title: "Error", description: "Nomor registrasi atau ID registrasi tidak ditemukan.", variant: "destructive" });
+      alert("Nomor registrasi atau ID registrasi tidak ditemukan.");
       return;
     }
-
-    // Check status before verifying
+    // Check status before verifying (using selectedParticipant data)
+    // Allow verification if status is 'pending', 'Pending Verification', or 'Unpaid'
     if (selectedParticipant.registration_status === 'paid') {
-        toast({ title: "Info", description: `Status registrasi saat ini sudah 'paid', tidak dapat diverifikasi manual lagi.` });
+        alert(`Status registrasi saat ini adalah 'paid', tidak dapat diverifikasi manual lagi.`);
         return;
     }
-
     setIsVerifying(true);
     console.log(`Attempting manual verification for: ${selectedParticipant.registration_number} (ID: ${selectedParticipant.registration_id})`);
-
+    
     try {
-      // 1. Get existing Payment ID for this registration (if any)
-      let existingPaymentId: string | null = null;
-      const { data: paymentData, error: paymentFetchError } = await supabase
-        .from('payments')
-        .select('id')
-        .eq('registration_id', selectedParticipant.registration_id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle(); // Use maybeSingle to avoid error if no payment exists
-
-      if (paymentFetchError && paymentFetchError.code !== 'PGRST116') { // Ignore 'No rows found' error
-        throw new Error(`Failed to check existing payment: ${paymentFetchError.message}`);
-      }
-      existingPaymentId = paymentData?.id ?? null;
-      console.log(`Existing Payment ID found: ${existingPaymentId}`);
-
-      // 2. Prepare Payload for API
-      const apiPayload = {
-        paymentId: existingPaymentId, // Send existing ID or null
+      // Generate a payment ID if none exists
+      const paymentId = crypto.randomUUID();
+      console.log(`Using payment ID: ${paymentId} for verification`);
+      
+      // Call the manual-verify-payment API
+      console.log("Calling manual-verify-payment API with data:", {
+        paymentId,
         registrationId: selectedParticipant.registration_id,
-        notes: "Verified through admin participants interface",
-      };
-      console.log("Calling manual-verify-payment API with data:", apiPayload);
-
-      // 3. Call the manual-verify-payment API
+        notes: "Verified through admin participants interface"
+      });
+      
       const response = await fetch("/api/admin/manual-verify-payment", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(apiPayload),
+        body: JSON.stringify({
+          paymentId: paymentId,
+          registrationId: selectedParticipant.registration_id,
+          notes: "Verified through admin participants interface",
+        }),
       });
-
+      
       const responseData = await response.json();
       console.log("Manual verification API response:", responseData);
-
+      
       if (!response.ok) {
-        throw new Error(responseData.error || "Failed to verify payment via API");
-      }
+        throw new Error(responseData.error || "Failed to verify payment");
 
-      console.log(`Verification successful via API for: ${selectedParticipant.registration_number}`);
+// Fetch order details when the manual verification modal opens
+useEffect(() => {
+if (showManualVerifyModal && selectedParticipant?.registration_number) {
+const fetchDetails = async () => {
+setIsFetchingDetails(true);
+setFetchError(null);
+setOrderDetails(null); // Clear previous details
+console.log(`Fetching details for reg number: ${selectedParticipant.registration_number}`);
+try {
+// Placeholder: Replace with actual Supabase query or function call
+// This query needs to get registration(s), participant(s), workshop(s), pricing details
+// based on the registration_number.
+// Example structure of expected data:
+await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate network delay
+const mockDetails = {
+registrationNumber: selectedParticipant.registration_number,
+participants: [selectedParticipant.full_name], // Fetch all participants with this reg number
+items: [
+{ name: 'Symposium Access', price: 1000000 },
+{ name: 'Workshop A', price: 500000 }
+],
+totalAmount: 1500000,
+// Add other relevant details: payment method, status etc.
+};
+setOrderDetails(mockDetails);
+// TODO: Replace with actual Supabase call, e.g.:
+// const { data, error } = await supabase.rpc('get_registration_details', {
+// registration_number_input: selectedParticipant.registration_number
+// });
+// if (error) throw error;
+// setOrderDetails(data);
+} catch (error: any) {
+console.error("Error fetching order details:", error);
+setFetchError("Gagal memuat detail pesanan.");
+} finally {
+setIsFetchingDetails(false);
+}
+};
+fetchDetails();
+}
+}, [showManualVerifyModal, selectedParticipant, supabase]);
 
-      // 4. Refresh participant data from server instead of optimistic update
-      await fetchParticipants(); // Reload data from the source of truth
-      toast({ title: "Success", description: `Registrasi ${selectedParticipant.registration_number} berhasil diverifikasi.` });
-      setShowManualVerifyModal(false); // Close modal on success
+return (
+<div className="space-y-4">
+<div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+<h2 className="text-2xl font-bold tracking-tight">Daftar Peserta</h2>
+<div className="flex flex-col gap-2 md:flex-row">
+<div className="relative">
+<Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+<Input
+type="search"
+placeholder="Cari peserta..."
+className="w-full pl-8 md:w-[250px]"
+value={searchQuery}
+onChange={(e) => setSearchQuery(e.target.value)}
+/>
+</div>
+<Select value={participantType} onValueChange={setParticipantType}>
+<SelectTrigger className="w-full md:w-[180px]">
+<SelectValue placeholder="Tipe Peserta" />
+</SelectTrigger>
+<SelectContent>
+<SelectItem value="all">Semua Tipe</SelectItem>
+<SelectItem value="specialist_doctor">Dokter Spesialis</SelectItem>
+<SelectItem value="general_doctor">Dokter Umum</SelectItem>
+<SelectItem value="nurse">Perawat</SelectItem>
+<SelectItem value="student">Mahasiswa</SelectItem>
+<SelectItem value="other">Lainnya</SelectItem>
+</SelectContent>
+</Select>
+<Button variant="outline" size="icon" onClick={exportToExcel} disabled={participants.length === 0}>
+<Download className="h-4 w-4" />
+</Button>
+</div>
+</div>
 
-
-      // 5. Trigger email sending AFTER successful verification and state update
-      //    Run this async without blocking the UI closing
-      (async () => {
-          try {
-              console.log(`Attempting to send verification email for participant: ${selectedParticipant.participant_id}`);
-              if (!selectedParticipant.participant_id || !selectedParticipant.registration_id) {
-                  console.error("Missing participant or registration ID for email sending.");
-                  return; // Don't proceed if IDs are missing
-              }
-              const { error: emailError } = await supabase.functions.invoke('resend-verification-email', {
-                  body: { 
-                  participantId: selectedParticipant.participant_id, 
-                  registrationId: selectedParticipant.registration_id 
-                  }
-              });
-
-              if (emailError) {
-                  throw emailError; // Let the catch block handle it
-              }
-              console.log(`Verification email function invoked successfully for participant: ${selectedParticipant.participant_id}`);
-              // Optional: Show a less intrusive success toast for email?
-              // toast({ title: "Info", description: "Email konfirmasi sedang dikirim." });
-
-          } catch (emailError: any) {
-              console.error("Error invoking/sending verification email:", emailError);
-              // Notify admin separately about email failure without blocking verification success
-               toast({ 
-                  title: "Peringatan Email", 
-                  description: `Verifikasi berhasil, TAPI GAGAL mengirim email: ${emailError.message || 'Unknown error'}. Kirim ulang manual jika perlu.`,
-                  variant: "destructive",
-                  duration: 10000 // Longer duration for warning
-              });
-          }
-      })(); // Immediately invoke the async email function
+<div className="rounded-md border">
+<Table>
+<TableHeader>
+<TableRow>
+<TableHead>No. Registrasi</TableHead>
+<TableHead>QR Code ID</TableHead>
+<TableHead>Nama</TableHead>
+<TableHead>NIK</TableHead>
+<TableHead>Email</TableHead>
+<TableHead>Telepon</TableHead>
+<TableHead>Institusi</TableHead>
+<TableHead>Status Registrasi</TableHead>
+<TableHead>Catatan Pembayaran</TableHead>
+<TableHead className="text-right">Aksi</TableHead>
+</TableRow>
+</TableHeader>
+<TableBody>
+{loading ? (
+[...Array(5)].map((_, i) => (
+<TableRow key={i}>
+<TableCell colSpan={10} className="h-12 animate-pulse bg-muted"></TableCell>
+</TableRow>
+))
+) : participants.length === 0 ? (
+<TableRow>
+<TableCell colSpan={10} className="h-24 text-center">
+Tidak ada data peserta
+</TableCell>
+</TableRow>
+) : (
+participants.map((p) => {
+// Log the status for debugging
+console.log(`Participant: ${p.full_name}, Status: '${p.registration_status}'`);
+// Determine badge variant based on status
+const badgeVariant = p.registration_status === 'verified'
+? 'success'
+: (p.registration_status === 'pending' || p.registration_status === 'pending verification'
+? 'secondary'
+: 'destructive');
+          : p
+      ));
+      setShowManualVerifyModal(false); // Close modal
 
     } catch (error: any) {
       console.error("Error during manual verification:", error);
-       toast({ 
-          title: "Gagal Verifikasi", 
-          description: error.message || 'Unknown error',
-          variant: "destructive"
-      });
+      alert(`Gagal melakukan verifikasi manual: ${error.message || 'Unknown error'}`);
     } finally {
       setIsVerifying(false);
     }
   };
 
+  // Function for manual verification of payments
+  async function handleManualVerification() {
+    if (!selectedParticipant?.registration_number || !selectedParticipant?.registration_id) {
+      alert("Nomor registrasi atau ID registrasi tidak ditemukan.");
+      return;
+    }
+    
+    // Check status before verifying
+    if (selectedParticipant.registration_status === 'paid') {
+      alert(`Status registrasi saat ini adalah 'paid', tidak dapat diverifikasi manual lagi.`);
+      return;
+    }
+    
+    setIsVerifying(true);
+    console.log(`Attempting manual verification for: ${selectedParticipant.registration_number} (ID: ${selectedParticipant.registration_id})`);
+    
+    try {
+      // Generate a payment ID if none exists
+      const paymentId = crypto.randomUUID();
+      console.log(`Using payment ID: ${paymentId} for verification`);
+      
+      // Call the manual-verify-payment API
+      console.log("Calling manual-verify-payment API with data:", {
+        paymentId,
+        registrationId: selectedParticipant.registration_id,
+        notes: "Verified through admin participants interface"
+      });
+      
+      const response = await fetch("/api/admin/manual-verify-payment", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          paymentId: paymentId,
+          registrationId: selectedParticipant.registration_id,
+          notes: "Verified through admin participants interface",
+        }),
+      });
+      
+      const responseData = await response.json();
+      console.log("Manual verification API response:", responseData);
+      
+      if (!response.ok) {
+        throw new Error(responseData.error || "Failed to verify payment");
+      }
+      
+      console.log(`Verification successful for: ${selectedParticipant.registration_number}`);
+      console.log(`Registration status updated to: ${responseData.registration_status || 'unknown'}`);
+      
+      // Call Edge Function to send verification email
+      try {
+        console.log(`Attempting to send verification email for participant: ${selectedParticipant.participant_id}`);
+        const { data: emailResult, error: emailError } = await supabase.functions.invoke('resend-verification-email', {
+          body: { 
+            participantId: selectedParticipant.participant_id, 
+            registrationId: selectedParticipant.registration_id 
+          }
+        });
+
+        console.log('Email function response:', emailResult);
+
+        if (emailError) {
+          throw emailError;
+        }
+        
+        console.log(`Verification email function invoked successfully for participant: ${selectedParticipant.participant_id}`);
+        alert(`Registrasi ${selectedParticipant.registration_number} berhasil diverifikasi manual DAN email konfirmasi sedang dikirim.`);
+
+      } catch (emailError: any) {
+        console.error("Error invoking/sending verification email:", emailError);
+        // Notify admin verification succeeded, but email failed
+        alert(`Registrasi ${selectedParticipant.registration_number} berhasil diverifikasi manual, TETAPI GAGAL mengirim email konfirmasi: ${emailError.message || 'Unknown error'}. Harap kirim ulang manual.`);
+      }
+      
+      // Update local state (optimistic update)
+      setParticipants(prev => prev.map(p => 
+        p.registration_number === selectedParticipant.registration_number
+          ? { ...p, registration_status: 'paid' } // Update status locally to 'paid'
+          : p
+      ));
+      
+      setShowManualVerifyModal(false); // Close modal
+    } catch (error: any) {
+      console.error("Error during manual verification:", error);
+      alert(`Gagal melakukan verifikasi manual: ${error.message || 'Unknown error'}`);
+    } finally {
+      setIsVerifying(false);
+    }
+  }
+  
   // Function to format currency (Example)
   const formatCurrency = (amount: number | null | undefined) => {
     if (amount === null || amount === undefined) return 'N/A';
@@ -374,7 +526,7 @@ export function AdminParticipants() {
       };
       fetchDetails();
     }
-  }, [showManualVerifyModal, selectedParticipant, supabase]);;
+  }, [showManualVerifyModal, selectedParticipant, supabase]);
 
   return (
     <div className="space-y-4">

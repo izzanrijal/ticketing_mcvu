@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
         .insert({
           id: paymentId,
           registration_id: registrationId,
-          status: "paid", // Changed from verified to paid for consistency
+          status: "verified", 
           verified_at: new Date().toISOString(),
           notes: notes || "Manually verified by admin",
           payment_method: "manual",
@@ -47,11 +47,11 @@ export async function POST(req: NextRequest) {
       throw checkPaymentError
     }
 
-    // Update payment status to paid (not just verified)
+    // Update payment status to verified
     const { error: paymentError } = await supabase
       .from("payments")
       .update({
-        status: "paid", // Changed from verified to paid for consistency
+        status: "verified", 
         verified_at: new Date().toISOString(),
         notes: notes || "Manually verified by admin",
       })
@@ -130,18 +130,31 @@ export async function POST(req: NextRequest) {
       email_result: emailResult,
     })
   } catch (error: unknown) {
-    if (error instanceof Error) {
-      console.error("Error in manual payment verification:", error)
+    // Log immediately, regardless of type
+    console.error("!!! RAW Error caught in manual payment verification:", error); 
 
-      // Log the error
-      await supabase.from("error_logs").insert({
-        source: "manual_payment_verification",
-        message: `Error verifying payment: ${error.message}`,
-        stack: error.stack,
-        level: "error",
-      })
+    if (error instanceof Error) {
+      // Log specifically if it's an Error instance
+      console.error("!!! DETAILED Error in manual payment verification:", error.message, error.stack);
+
+      // Attempt to log to Supabase
+      try {
+        await supabase.from("error_logs").insert({
+          source: "manual_payment_verification",
+          message: `Error verifying payment: ${error.message}`,
+          stack: error.stack,
+          level: "error",
+        });
+        console.log("Error details logged to Supabase error_logs table.");
+      } catch (logError) {
+        console.error("!!! FAILED to log error to Supabase error_logs table:", logError);
+      }
+
+    } else {
+        console.error("!!! Caught object is NOT an instance of Error.");
     }
 
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    // Always return the 500 response
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
