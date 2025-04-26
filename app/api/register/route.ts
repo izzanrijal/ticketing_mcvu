@@ -319,6 +319,8 @@ export async function POST(request: Request) {
           
           // Add to our array of participant IDs
           participantIds.push(newParticipant.id)
+          
+          // QR code akan dibuat setelah registrationId tersedia
         } catch (insertError) {
           console.error("Exception during participant insert:", insertError)
           continue
@@ -448,6 +450,29 @@ export async function POST(request: Request) {
           console.error(`Error updating participant ${participantId} with registration_id:`, updateError.message)
         } else {
           console.log(`Updated participant ${participantId} with registration_id ${registrationId}`)
+          
+          // Generate QR code id unik (gunakan uuid)
+          try {
+            // Format kode booking tiket pesawat: 6 karakter alfanumerik (huruf kapital dan angka)
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Menghindari karakter yang mirip seperti I/1, O/0
+            let qrCodeId = '';
+            for (let i = 0; i < 6; i++) {
+              qrCodeId += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            const { error: qrError } = await supabase.from("participant_qr_codes").insert({
+              participant_id: participantId,
+              registration_id: registrationId,
+              qr_code_id: qrCodeId,
+            });
+            
+            if (qrError) {
+              console.error(`Error creating QR code for participant ${participantId}:`, qrError.message)
+            } else {
+              console.log(`Created QR code ${qrCodeId} for participant ${participantId}`)
+            }
+          } catch (qrError) {
+            console.error(`Exception creating QR code for participant ${participantId}:`, qrError)
+          }
         }
         
         // Create workshop registrations if needed
@@ -484,6 +509,28 @@ export async function POST(request: Request) {
         }
       } catch (error) {
         console.error(`Error in post-registration processing for participant ${participantId}:`, error)
+      }
+    }
+
+    // Insert contact_person if available
+    if (registrationData.contact_person && registrationData.contact_person.name && registrationData.contact_person.email && registrationData.contact_person.phone) {
+      try {
+        const contactPersonData = {
+          registration_id: registrationId,
+          name: registrationData.contact_person.name,
+          email: registrationData.contact_person.email,
+          phone: registrationData.contact_person.phone
+        }
+        const { error: contactPersonError } = await supabase
+          .from("contact_persons")
+          .insert(contactPersonData)
+        if (contactPersonError) {
+          console.error("Error inserting contact_person:", contactPersonError)
+        } else {
+          console.log("Contact person inserted successfully")
+        }
+      } catch (contactPersonError) {
+        console.error("Error inserting contact_person:", contactPersonError)
       }
     }
 

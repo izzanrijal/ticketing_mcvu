@@ -1,5 +1,31 @@
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 
+/**
+ * Generate a QR code image as a data URL
+ * @param data The data to encode in the QR code
+ * @returns Promise resolving to a data URL for the QR code image
+ */
+export async function generateQRCode(data: string): Promise<string> {
+  try {
+    // In a real implementation, you would use a QR code generation library
+    // For example, using qrcode-generator, qrcode, or another QR library
+    // For now, we'll just return a placeholder URL
+    
+    // This would be replaced with actual QR code generation code
+    // Example with qrcode library:
+    // const QRCode = require('qrcode');
+    // return await QRCode.toDataURL(data);
+    
+    // Placeholder implementation
+    console.log("Generating QR code for data:", data);
+    return `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==`;
+  } catch (error) {
+    console.error("Error generating QR code:", error);
+    // Return a fallback image URL
+    return `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==`;
+  }
+}
+
 // Generate a QR code for a participant
 export function generateParticipantQrData(registrationItemId: string) {
   // Create a data object with the registration item ID
@@ -53,7 +79,14 @@ export async function validateAndCheckIn(qrData: string) {
     }
 
     // Check if the registration is paid
-    if (registrationItem.registration.status !== "paid") {
+    // Ensure we're accessing the status correctly from the registration object
+    // Use type assertion to handle the complex structure
+    const registration = registrationItem.registration as any;
+    const registrationStatus = Array.isArray(registration) 
+      ? registration[0]?.status 
+      : registration?.status;
+      
+    if (registrationStatus !== "paid") {
       return {
         success: false,
         message: "Registration is not paid",
