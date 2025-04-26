@@ -108,31 +108,82 @@ export function ManualVerification() {
         return
       }
 
-      const { error } = await supabase
-        .from("registrations")
-        .update({
-          status: status,
-          payment_status: status === "paid",
-          payment_verified_at: new Date().toISOString(),
-          payment_verified_by: userData.user.id,
-        })
-        .eq("id", registrationId)
+      // Fetch payment info for this registration
+      const { data: paymentData, error: paymentError } = await supabase
+        .from("payments")
+        .select("id")
+        .eq("registration_id", registrationId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single()
 
-      if (error) throw error
+      if (paymentError && paymentError.code !== 'PGRST116') { // PGRST116 is 'not found'
+        throw paymentError
+      }
 
-      toast({
-        title: "Success",
-        description: `Registration ${status === "paid" ? "verified" : "updated"} successfully.`,
+      let paymentId = paymentData?.id
+
+      // If no payment exists, create one
+      if (!paymentId) {
+        const { data: newPayment, error: createError } = await supabase
+          .from("payments")
+          .insert({
+            registration_id: registrationId,
+            amount: 0, // Will be updated by admin
+            status: "pending",
+            payment_method: "manual",
+            notes: "Created during manual verification"
+          })
+          .select("id")
+          .single()
+
+        if (createError) throw createError
+        paymentId = newPayment.id
+      }
+
+      // Call the manual verification API instead of directly updating
+      const response = await fetch("/api/admin/manual-verify-payment", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          paymentId,
+          registrationId,
+          transactionId: null, // Optional, can be null
+          notes: `Manually verified by admin (${userData.user.email})`
+        }),
       })
 
-      // Refresh the registrations list
-      fetchRegistrations()
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to verify payment")
+      }
+
+      const result = await response.json()
+      
+      // Show success or warning based on email result
+      if (result.email_result && result.email_result.success) {
+        toast({
+          title: "Success",
+          description: `Registration verified and confirmation email sent successfully.`,
+        })
+      } else {
+        toast({
+          title: "Partial Success",
+          description: `Registration verified successfully, but there was an issue sending the confirmation email: ${result.email_result?.message || 'Unknown error'}`,
+          variant: "default",
+        })
+      }
+
+      // Close the dialog and refresh data
       setDetailsOpen(false)
+      fetchRegistrations()
     } catch (error) {
       console.error("Error verifying registration:", error)
       toast({
         title: "Error",
-        description: "Failed to verify registration. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to verify registration.",
         variant: "destructive",
       })
     }

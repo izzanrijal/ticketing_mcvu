@@ -15,7 +15,7 @@ export default async function AdminLoginPage({
 }: {
   searchParams: { [key: string]: string | string[] | undefined }
 }) {
-  const supabase = createServerSupabaseClient()
+  const supabase = await createServerSupabaseClient()
 
   // Check if user is already logged in
   const {

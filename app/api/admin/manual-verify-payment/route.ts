@@ -4,11 +4,11 @@
  */
 
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase"
+import { supabaseAdmin } from "@/lib/supabase" // Use the admin client
 import { sendPaymentConfirmationEmail } from "@/lib/email-service"
 
-// Create Supabase client
-const supabase = createClient()
+// Use the imported admin client
+const supabase = supabaseAdmin
 
 export async function POST(req: NextRequest) {
   try {
@@ -58,8 +58,17 @@ export async function POST(req: NextRequest) {
 
     if (registrationError) throw registrationError
 
+    // --- Debugging Email --- 
+    console.log("Preparing to send payment confirmation email for registration:", registration?.id);
+    console.log("Registration data being passed to email function:", JSON.stringify(registration, null, 2));
+    // --- End Debugging --- 
+
     // Send confirmation email
     const emailResult = await sendPaymentConfirmationEmail(registration)
+
+    // --- Debugging Email --- 
+    console.log("Result received from sendPaymentConfirmationEmail:", JSON.stringify(emailResult, null, 2));
+    // --- End Debugging --- 
 
     return NextResponse.json({
       success: true,
@@ -68,16 +77,18 @@ export async function POST(req: NextRequest) {
       registration_id: registrationId,
       email_result: emailResult,
     })
-  } catch (error) {
-    console.error("Error in manual payment verification:", error)
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      console.error("Error in manual payment verification:", error)
 
-    // Log the error
-    await supabase.from("error_logs").insert({
-      source: "manual_payment_verification",
-      message: `Error verifying payment: ${error.message}`,
-      stack: error.stack,
-      level: "error",
-    })
+      // Log the error
+      await supabase.from("error_logs").insert({
+        source: "manual_payment_verification",
+        message: `Error verifying payment: ${error.message}`,
+        stack: error.stack,
+        level: "error",
+      })
+    }
 
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }

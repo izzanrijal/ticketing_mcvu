@@ -1,29 +1,11 @@
 import { redirect } from "next/navigation"
-import { cookies } from "next/headers"
-import { createServerClient } from "@supabase/ssr"
+import { createServerSupabaseClient } from "@/lib/supabase-auth"
 
 import { AdminParticipants } from "@/components/admin/participants"
 import { AdminDashboardLayout } from "@/components/admin/dashboard-layout"
 
 export default async function ParticipantsPage() {
-  // Create a Supabase client using the same approach as the main admin page
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name) {
-          return cookies().get(name)?.value
-        },
-        set(name, value, options) {
-          // Not used in server component
-        },
-        remove(name, options) {
-          // Not used in server component
-        },
-      },
-    }
-  )
+  const supabase = await createServerSupabaseClient()
 
   // Get the current user
   const { data: { user } } = await supabase.auth.getUser()
