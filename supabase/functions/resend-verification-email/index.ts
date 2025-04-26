@@ -153,25 +153,56 @@ serve(async (req) => {
 
     let qrCodeSection = '';
     if (qrCodeId !== "N/A") {
-      if (qrCodeUrl) {
+      // Log QR code URL for debugging
+      console.log("QR code URL from database:", qrCodeUrl);
+      
+      // If we have a QR code URL, use it
+      if (qrCodeUrl && qrCodeUrl.trim() !== '') {
+        // Ensure the URL is absolute
+        const absoluteQrUrl = qrCodeUrl.startsWith('http') ? qrCodeUrl : `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrCodeId)}`;
+        
+        console.log("Using QR code URL in email:", absoluteQrUrl);
+        
         qrCodeSection = `
           <h3>Informasi Check-in di Venue:</h3>
           <p>Untuk melakukan registrasi ulang di venue acara, harap tunjukkan QR Code berikut kepada petugas:</p>
           <div style="text-align: center; margin: 20px 0;">
-            <img src="${qrCodeUrl}" alt="QR Code" style="width: 200px; height: 200px;"><br>
+            <img src="${absoluteQrUrl}" alt="QR Code" style="width: 200px; height: 200px; border: 1px solid #ddd;"><br>
             <strong style="font-size: 1.2em;">${qrCodeId}</strong>
           </div>
           <p>Simpan email ini atau screenshot QR Code Anda.</p>
         `;
       } else {
+        // Generate a QR code URL on the fly if we don't have one
+        const generatedQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrCodeId)}`;
+        console.log("Generated QR code URL for email:", generatedQrUrl);
+        
         qrCodeSection = `
           <h3>Informasi Check-in di Venue:</h3>
-          <p>Untuk melakukan registrasi ulang di venue acara, harap tunjukkan <strong>QR Code ID</strong> berikut kepada petugas:</p>
-          <div style="border: 1px solid #ccc; padding: 15px; text-align: center; margin: 20px 0; background-color: #f9f9f9;">
-            <h1 style="font-size: 2.5em; letter-spacing: 3px; margin: 0;">${qrCodeId}</h1>
+          <p>Untuk melakukan registrasi ulang di venue acara, harap tunjukkan QR Code berikut kepada petugas:</p>
+          <div style="text-align: center; margin: 20px 0;">
+            <img src="${generatedQrUrl}" alt="QR Code" style="width: 200px; height: 200px; border: 1px solid #ddd;"><br>
+            <strong style="font-size: 1.2em;">${qrCodeId}</strong>
           </div>
-          <p>Simpan email ini atau catat QR Code ID Anda.</p>
+          <p>Simpan email ini atau screenshot QR Code Anda.</p>
         `;
+        
+        // Update the database with this URL for future use
+        try {
+          const { error: updateError } = await supabaseAdmin
+            .from('participant_qr_codes')
+            .update({ qr_code_url: generatedQrUrl })
+            .eq('participant_id', participantId)
+            .eq('registration_id', registrationId);
+            
+          if (updateError) {
+            console.error(`Failed to update QR code URL in database: ${updateError.message}`);
+          } else {
+            console.log("Updated QR code URL in database:", generatedQrUrl);
+          }
+        } catch (error) {
+          console.error("Error updating QR code URL:", error);
+        }
       }
     } else {
       qrCodeSection = `

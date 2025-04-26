@@ -217,32 +217,57 @@ export function AdminParticipants() {
   };
 
   async function handleManualVerification() {
-    if (!selectedParticipant?.registration_number) {
-      alert("Nomor registrasi tidak ditemukan.");
+    if (!selectedParticipant?.registration_number || !selectedParticipant?.registration_id) {
+      alert("Nomor registrasi atau ID registrasi tidak ditemukan.");
       return;
     }
     // Check status before verifying (using selectedParticipant data)
     // Allow verification if status is 'pending', 'Pending Verification', or 'Unpaid'
-    if (selectedParticipant.registration_status !== 'pending' && selectedParticipant.registration_status !== 'Pending Verification' && selectedParticipant.registration_status !== 'Unpaid') {
-        alert(`Status registrasi saat ini adalah '${selectedParticipant.registration_status}', tidak dapat diverifikasi manual.`);
+    if (selectedParticipant.registration_status === 'paid') {
+        alert(`Status registrasi saat ini adalah 'paid', tidak dapat diverifikasi manual lagi.`);
         return;
     }
     setIsVerifying(true);
-    console.log(`Attempting manual verification for: ${selectedParticipant.registration_number}`);
+    console.log(`Attempting manual verification for: ${selectedParticipant.registration_number} (ID: ${selectedParticipant.registration_id})`);
+    
     try {
-      // TODO: Call Supabase Edge Function for verification
-      // Example: await supabase.functions.invoke('manual-verify-registration', { 
-      //   body: { registrationNumber: selectedParticipant.registration_number }
-      // });
-      await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate network delay
+      // Generate a payment ID if none exists
+      const paymentId = crypto.randomUUID();
+      console.log(`Using payment ID: ${paymentId} for verification`);
       
-      // If successful:
+      // Call the manual-verify-payment API
+      console.log("Calling manual-verify-payment API with data:", {
+        paymentId,
+        registrationId: selectedParticipant.registration_id,
+        notes: "Verified through admin participants interface"
+      });
+      
+      const response = await fetch("/api/admin/manual-verify-payment", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          paymentId: paymentId,
+          registrationId: selectedParticipant.registration_id,
+          notes: "Verified through admin participants interface",
+        }),
+      });
+      
+      const responseData = await response.json();
+      console.log("Manual verification API response:", responseData);
+      
+      if (!response.ok) {
+        throw new Error(responseData.error || "Failed to verify payment");
+      }
+      
       console.log(`Verification successful for: ${selectedParticipant.registration_number}`);
+      console.log(`Registration status updated to: ${responseData.registration_status || 'unknown'}`);
       
-      // -- START: Call Edge Function to send email --
+      // After successful verification, send confirmation email
       try {
         console.log(`Attempting to send verification email for participant: ${selectedParticipant.participant_id}`);
-        const { error: emailError } = await supabase.functions.invoke('send-verification-email', {
+        const { error: emailError } = await supabase.functions.invoke('resend-verification-email', {
           body: { 
             participantId: selectedParticipant.participant_id, 
             registrationId: selectedParticipant.registration_id 
@@ -250,7 +275,7 @@ export function AdminParticipants() {
         });
 
         if (emailError) {
-          throw emailError; // Throw error to be caught below
+          throw emailError;
         }
         
         console.log(`Verification email function invoked successfully for participant: ${selectedParticipant.participant_id}`);
@@ -261,12 +286,11 @@ export function AdminParticipants() {
         // Notify admin verification succeeded, but email failed
         alert(`Registrasi ${selectedParticipant.registration_number} berhasil diverifikasi manual, TETAPI GAGAL mengirim email konfirmasi: ${emailError.message || 'Unknown error'}. Harap kirim ulang manual.`);
       }
-      // -- END: Call Edge Function --
 
       // Update local state (optimistic update)
       setParticipants(prev => prev.map(p => 
         p.registration_number === selectedParticipant.registration_number
-          ? { ...p, registration_status: 'Verified' } // Update status locally
+          ? { ...p, registration_status: 'paid' } // Update status locally to 'paid' instead of 'Verified'
           : p
       ));
       setShowManualVerifyModal(false); // Close modal
