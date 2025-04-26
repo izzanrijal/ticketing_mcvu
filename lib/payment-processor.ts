@@ -157,9 +157,9 @@ export async function checkPaymentForRegistration(registrationId: string) {
       }
     }
 
-    // Check if payment is already verified
+    // Check if payment is already verified/paid
     const payment = registration.payments?.[0]
-    if (payment?.status === "verified" || registration.status === "paid") {
+    if (payment?.status === "paid" || payment?.status === "verified" || registration.status === "paid") {
       return {
         success: true,
         message: "Payment already verified",

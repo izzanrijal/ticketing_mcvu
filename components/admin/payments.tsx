@@ -96,18 +96,52 @@ export function AdminPayments() {
         })
         return
       }
-
-      const { error } = await supabase
-        .from("registrations")
-        .update({
-          payment_status: verified,
-          payment_verified_at: new Date().toISOString(),
-          payment_verified_by: userData.user.id,
-          status: verified ? "paid" : "awaiting_payment",
+      
+      // Get payment ID for this registration
+      const { data: paymentData, error: paymentFetchError } = await supabase
+        .from("payments")
+        .select("id")
+        .eq("registration_id", registrationId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single()
+        
+      if (paymentFetchError && paymentFetchError.code !== "PGRST116") {
+        throw paymentFetchError
+      }
+      
+      // If no payment exists, create a payment ID
+      const paymentId = paymentData?.id || crypto.randomUUID()
+      
+      if (verified) {
+        // Use the manual-verify-payment API instead of direct database update
+        const response = await fetch("/api/admin/manual-verify-payment", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            paymentId: paymentId,
+            registrationId: registrationId,
+            notes: "Verified through admin interface",
+          }),
         })
-        .eq("id", registrationId)
-
-      if (error) throw error
+        
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || "Failed to verify payment")
+        }
+      } else {
+        // For rejection, just update the registration status
+        const { error } = await supabase
+          .from("registrations")
+          .update({
+            status: "awaiting_payment",
+          })
+          .eq("id", registrationId)
+          
+        if (error) throw error
+      }
 
       toast({
         title: "Success",

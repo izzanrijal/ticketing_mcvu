@@ -109,8 +109,8 @@ serve(async (req: Request) => {
       console.log(`Match found: PaymentID=${paymentId}, RegID=${registrationId}, ParticipantID=${participantId}, CurrentStatus=${currentRegStatus}`);
 
       // Ensure registration is still pending or unpaid before verifying
-      if (currentRegStatus !== 'pending' && currentRegStatus !== 'pending verification' && currentRegStatus !== 'unpaid') {
-         console.log(`Registration ${registrationId} status is already '${currentRegStatus}'. Skipping verification.`);
+      if (currentRegStatus === 'paid') {
+         console.log(`Registration ${registrationId} status is already 'paid'. Skipping verification.`);
          continue;
       }
 
@@ -131,10 +131,10 @@ serve(async (req: Request) => {
       }
       console.log(`Payment status updated for ID: ${paymentId}`);
 
-      // 3. Update registration status
+      // 3. Update registration status to paid (not just verified)
       const { error: updateRegError } = await supabase
         .from('registrations')
-        .update({ registration_status: 'verified' })
+        .update({ status: 'paid' }) // Changed from registration_status to status and 'verified' to 'paid'
         .eq('id', registrationId);
 
       if (updateRegError) {

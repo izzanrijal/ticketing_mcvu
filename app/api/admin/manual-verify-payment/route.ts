@@ -34,11 +34,11 @@ export async function POST(req: NextRequest) {
         .insert({
           id: paymentId,
           registration_id: registrationId,
-          status: "verified",
+          status: "paid", // Changed from verified to paid for consistency
           verified_at: new Date().toISOString(),
           notes: notes || "Manually verified by admin",
           payment_method: "manual",
-          amount: 0, // Will be updated with registration amount
+          amount: 0, // Will be updated with registration amount,
         })
         .select()
 
@@ -47,11 +47,11 @@ export async function POST(req: NextRequest) {
       throw checkPaymentError
     }
 
-    // Update payment status
+    // Update payment status to paid (not just verified)
     const { error: paymentError } = await supabase
       .from("payments")
       .update({
-        status: "verified",
+        status: "paid", // Changed from verified to paid for consistency
         verified_at: new Date().toISOString(),
         notes: notes || "Manually verified by admin",
       })

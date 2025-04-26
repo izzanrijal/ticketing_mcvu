@@ -36,11 +36,22 @@ export async function POST(req: NextRequest) {
       const { error: paymentError } = await supabase
         .from("payments")
         .update({
-          status: "verified",
+          status: "paid", // Changed from verified to paid for consistency
           verified_at: new Date().toISOString(),
-          verification_notes: notes || "Manually matched with transaction",
+          notes: notes || "Manually matched with transaction", // Changed from verification_notes to notes
         })
         .eq("id", paymentId)
+        
+      // Also update registration status to paid for consistency
+      const { error: registrationError } = await supabase
+        .from("registrations")
+        .update({
+          status: "paid",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", registrationId)
+        
+      if (registrationError) throw registrationError
 
       if (paymentError) throw paymentError
     }

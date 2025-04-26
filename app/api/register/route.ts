@@ -1,8 +1,44 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { schedulePaymentCheck } from "@/lib/payment-check-scheduler"
-// TODO: Implement this function in a separate module (e.g., lib/notifications.ts)
 import { sendRegistrationInvoice } from "@/lib/notifications"
+
+// Function to generate a unique QR code ID
+function generateQRCodeId() {
+  // Format kode booking tiket pesawat: 6 karakter alfanumerik (huruf kapital dan angka)
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Menghindari karakter yang mirip seperti I/1, O/0
+  let qrCodeId = '';
+  for (let i = 0; i < 6; i++) {
+    qrCodeId += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return qrCodeId;
+}
+
+// Function to generate and store QR code image asynchronously
+async function generateAndStoreQRCodeImage(qrCodeId: string, participantId: string, registrationId: string, supabase: any) {
+  try {
+    // Use a 3rd party service to generate QR code image
+    // This is a simple approach using a public API
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrCodeId)}`
+    
+    // Update the QR code record with the URL
+    const { error } = await supabase
+      .from("participant_qr_codes")
+      .update({ qr_code_url: qrCodeUrl })
+      .eq("participant_id", participantId)
+      .eq("registration_id", registrationId)
+    
+    if (error) {
+      console.error(`Error updating QR code URL for participant ${participantId}:`, error)
+      return false
+    }
+    
+    return true
+  } catch (error) {
+    console.error(`Error in QR code image generation for ${participantId}:`, error)
+    return false
+  }
+}
 
 export async function POST(request: Request) {
   try {
@@ -452,29 +488,28 @@ export async function POST(request: Request) {
         if (updateError) {
           console.error(`Error updating participant ${participantId} with registration_id:`, updateError.message)
         } else {
-          console.log(`Updated participant ${participantId} with registration_id ${registrationId}`)
-          
-          // Generate QR code id unik (gunakan uuid)
           try {
-            // Format kode booking tiket pesawat: 6 karakter alfanumerik (huruf kapital dan angka)
-            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Menghindari karakter yang mirip seperti I/1, O/0
-            let qrCodeId = '';
-            for (let i = 0; i < 6; i++) {
-              qrCodeId += chars.charAt(Math.floor(Math.random() * chars.length));
-            }
+            // Generate a unique QR code ID (using a format that's easy to read/type)
+            const qrCodeId = generateQRCodeId()
+            
+            // Create QR code record in database synchronously
             const { error: qrError } = await supabase.from("participant_qr_codes").insert({
               participant_id: participantId,
               registration_id: registrationId,
               qr_code_id: qrCodeId,
-            });
+            })
             
             if (qrError) {
-              console.error(`Error creating QR code for participant ${participantId}:`, qrError.message)
+              console.error(`Error creating QR code for participant ${participantId}:`, qrError)
             } else {
-              console.log(`Created QR code ${qrCodeId} for participant ${participantId}`)
+              // Generate and store QR code image asynchronously
+              generateAndStoreQRCodeImage(qrCodeId, participantId, registrationId, supabase)
+                .catch(imgError => {
+                  console.error(`Error generating QR code image for ${participantId}:`, imgError)
+                })
             }
-          } catch (qrError) {
-            console.error(`Exception creating QR code for participant ${participantId}:`, qrError)
+          } catch (qrInsertError) {
+            console.error(`Exception creating QR code for participant ${participantId}:`, qrInsertError)
           }
         }
         
@@ -546,8 +581,8 @@ export async function POST(request: Request) {
       notes:
         registrationData.payment_type === "sponsor"
           ? "Pembayaran sponsor"
-          : `Pembayaran mandiri (Unique Deduction: ${uniqueDeduction})`,
-      check_attempts: 0, // Initialize check attempts counter
+          : `Pembayaran mandiri (Unique Deduction: ${uniqueDeduction})`
+      // check_attempts column has a default value of 0 in the database
     }
     
     // Handle file upload if present

@@ -1,6 +1,5 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import * as qrcode from 'https://esm.sh/qrcode@1.5.1';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -105,48 +104,20 @@ serve(async (req) => {
 
       if (!qrCodeData.qr_code_url) {
         try {
-          const qrDataUrl = await qrcode.toDataURL(qrCodeId, {
-            width: 300,
-            margin: 2,
-            color: {
-              dark: '#000000',
-              light: '#ffffff'
-            }
-          });
+          // Use a public QR code generation service instead of generating it locally
+          // This is more reliable in a serverless environment
+          const generatedQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrCodeId)}`;
+          
+          // No need to upload to storage, just use the URL directly
 
-          const base64Data = qrDataUrl.split(',')[1];
-          const binaryData = atob(base64Data);
-          const byteArray = new Uint8Array(binaryData.length);
-          for (let i = 0; i < binaryData.length; i++) {
-            byteArray[i] = binaryData.charCodeAt(i);
-          }
-          const blob = new Blob([byteArray], { type: 'image/png' });
-
-          const fileName = `qrcodes/${registrationId}_${participantId}.png`;
-          const { data: uploadData, error: uploadError } = await supabaseAdmin
-            .storage
-            .from('public')
-            .upload(fileName, blob, {
-              contentType: 'image/png',
-              upsert: true
-            });
-
-          if (uploadError) {
-            throw new Error(`Failed to upload QR code: ${uploadError.message}`);
-          }
-
-          const { data: publicUrlData } = supabaseAdmin
-            .storage
-            .from('public')
-            .getPublicUrl(fileName);
-
-          qrCodeUrl = publicUrlData.publicUrl;
-
+          // Update database with URL directly
           const { error: updateError } = await supabaseAdmin
             .from('participant_qr_codes')
-            .update({ qr_code_url: qrCodeUrl })
+            .update({ qr_code_url: generatedQrUrl })
             .eq('participant_id', participantId)
             .eq('registration_id', registrationId);
+
+          qrCodeUrl = generatedQrUrl;
 
           if (updateError) {
             throw new Error(`Failed to update QR code URL: ${updateError.message}`);
