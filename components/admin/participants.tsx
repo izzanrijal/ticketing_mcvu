@@ -49,6 +49,10 @@ const participantTypeMap: { [key: string]: string } = {
 };
 
 export function AdminParticipants() {
+  // Log environment variables to check if they are accessible client-side
+  console.log('--- DEBUG: NEXT_PUBLIC_SUPABASE_URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
+  console.log('--- DEBUG: NEXT_PUBLIC_SUPABASE_ANON_KEY:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'Exists' : 'MISSING or Undefined'); // Don't log the key itself
+
   const [participants, setParticipants] = useState<ParticipantData[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
@@ -344,7 +348,7 @@ export function AdminParticipants() {
 
   // Fetch order details when the manual verification modal opens
   useEffect(() => {
-    if (showManualVerifyModal && selectedParticipant?.registration_number) {
+    if (showManualVerifyModal && selectedParticipant?.registration_id) {
       const fetchDetails = async () => {
         if (!selectedParticipant || !selectedParticipant.registration_id) return;
 
@@ -354,28 +358,48 @@ export function AdminParticipants() {
         setOrderDetails(null);
 
         try {
-          const { data, error } = await supabase
-            .from('registrations')
-            .select(`
-              *,
-              participants(*),
-              contact_persons(*),
-              transactions(*)
-            `)
-            .eq('id', selectedParticipant.registration_id)
-            .single();
+          const registrationId = selectedParticipant.registration_id;
+          console.log(`--- DEBUG: fetchDetails called for registrationId: ${registrationId} ---`);
+          
+          // Use the new API endpoint instead of direct Supabase client
+          const response = await fetch(`/api/registrations/${registrationId}`);
+          const jsonResponse = await response.json();
+          
+          // Log the full API response for debugging
+          console.log('API Response:', JSON.stringify(jsonResponse, null, 2));
 
-          if (error) {
-            console.error('Supabase error fetching registration details:', JSON.stringify(error, null, 2)); // Log specific error
-            throw new Error(`Gagal memuat detail registrasi: ${error.message}`);
+          // Check if we have an error in the response
+          if (!response.ok && !jsonResponse.data) {
+            throw new Error(jsonResponse.error || 'Failed to fetch registration details');
+          }
+          
+          // If we have data but also status 'fallback', log a warning
+          if (jsonResponse.status === 'fallback') {
+            console.warn('Using fallback data:', jsonResponse.error);
           }
 
-          if (!data) {
-             throw new Error('Data registrasi tidak ditemukan.');
-          }
+          const registrationDetails = jsonResponse.data;
+          console.log('Fetched registration details:', registrationDetails);
 
-          console.log('Fetched registration details:', data);
-          setOrderDetails(data as OrderDetails);
+          // Ensure tickets is an array before mapping
+          const ticket = Array.isArray(registrationDetails.tickets) 
+            ? registrationDetails.tickets 
+            : registrationDetails.tickets 
+              ? [registrationDetails.tickets] 
+              : [];
+
+          // Prepare order details for display
+          const orderDetails = {
+            registrationNumber: registrationDetails.registration_number,
+            participants: registrationDetails.participants?.[0] ? [registrationDetails.participants[0].full_name] : [],
+            items: ticket.map((item: any) => ({
+              name: item.name,
+              price: item.price,
+            })),
+            totalAmount: registrationDetails.payments?.[0] ? registrationDetails.payments[0].amount : 0,
+          };
+
+          setOrderDetails(orderDetails);
 
         } catch (err: any) {
           console.error("Error fetching registration details:", err);
@@ -504,7 +528,7 @@ export function AdminParticipants() {
                       : 'destructive');
 
                 return (
-                  <React.Fragment key={p.participant_id}><TableRow>
+                  <TableRow key={p.participant_id}>
                       <TableCell>{p.registration_number ?? 'N/A'}</TableCell>
                       <TableCell>{p.qr_code_id ?? 'N/A'}</TableCell>
                       <TableCell>{p.full_name ?? 'N/A'}</TableCell>
@@ -558,7 +582,7 @@ export function AdminParticipants() {
                         }
                       })()}
                       </TableCell>
-                    </TableRow></React.Fragment>
+                    </TableRow>
                 )
               })
             )}
