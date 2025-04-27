@@ -2,6 +2,7 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { PDFDocument, StandardFonts, rgb, PageSizes } from 'pdf-lib';
 import { Resend } from 'resend';
+import QRCode from 'qrcode'; // <<< IMPORT QRCODE
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -73,6 +74,20 @@ interface GenerateInvoiceParams {
     workshopDetailsMap: Map<string, WorkshopDetail>;
     participantTypeMap: { [key: string]: string }; 
     bankAccount: BankAccount | null;
+}
+
+interface GeneratePaidInvoiceParams extends GenerateInvoiceParams {
+    qrCodeData: string;
+}
+
+// Helper function for currency formatting
+function formatCurrency(amount: number): string {
+    // Ensure amount is a number, handle potential null/undefined
+    const numAmount = Number(amount);
+    if (isNaN(numAmount)) {
+        return "0"; // Or handle as an error
+    }
+    return numAmount.toLocaleString('id-ID');
 }
 
 export async function sendRegistrationInvoice(
@@ -290,6 +305,7 @@ export async function sendRegistrationInvoice(
             await resend.emails.send({
                 from: 'Panitia MVCU 2025 <panitia.mcvu@perkimakassar.com>',
                 to: [recipientEmail],
+                cc: ['mcvu2025@gmail.com'], // <<< ADDED CC
                 subject: emailSubject,
                 html: htmlContent,
                 attachments: [ { filename: `Invoice_MVCU2025_${registrationNumber}.pdf`, content: pdfBuffer } ], 
@@ -372,7 +388,7 @@ function generateInvoiceHtml(params: GenerateInvoiceParams): string {
                 <td style="padding: 5px 0;">${firstItem ? p.full_name : ''}</td> 
                 <td style="padding: 5px 0;">${symposiumTitle}</td> 
                 <td style="padding: 5px 0;">${participantTypeDisplay}</td>
-                <td style="padding: 5px 0; text-align: right;">${symposiumPrice > 0 ? symposiumPrice.toLocaleString('id-ID') : 'N/A'}</td>
+                <td style="padding: 5px 0; text-align: right;">${symposiumPrice > 0 ? formatCurrency(symposiumPrice) : 'N/A'}</td>
             </tr>`;
             firstItem = false; // Reset flag after first row
         }
@@ -387,7 +403,7 @@ function generateInvoiceHtml(params: GenerateInvoiceParams): string {
                     <td style="padding: 5px 0;">${firstItem ? p.full_name : ''}</td> 
                     <td style="padding: 5px 0;">${wsName}</td>
                     <td style="padding: 5px 0;">${participantTypeDisplay}</td>
-                    <td style="padding: 5px 0; text-align: right;">${wsPrice.toLocaleString('id-ID')}</td>
+                    <td style="padding: 5px 0; text-align: right;">${wsPrice > 0 ? formatCurrency(wsPrice) : 'N/A'}</td>
                 </tr>`;
                 firstItem = false; // Reset flag after first row
             });
@@ -419,12 +435,12 @@ function generateInvoiceHtml(params: GenerateInvoiceParams): string {
             <table style="width: 100%; max-width: 400px; margin-left: auto; margin-bottom: 20px; text-align: right;">
                  <tr>
                      <td>Subtotal:</td>
-                     <td style="padding-left: 15px;">Rp ${originalAmount.toLocaleString('id-ID')},-</td>
+                     <td style="padding-left: 15px;">Rp ${formatCurrency(originalAmount)},-</td>
                  </tr>
                  ${discountAmount > 0 ? `
                  <tr>
                      <td>Diskon:</td>
-                     <td style="padding-left: 15px;">- Rp ${discountAmount.toLocaleString('id-ID')},-</td>
+                     <td style="padding-left: 15px;">- Rp ${formatCurrency(discountAmount)},-</td>
                  </tr>
                  ` : ''}
                  <tr>
@@ -433,11 +449,11 @@ function generateInvoiceHtml(params: GenerateInvoiceParams): string {
                  </tr>
                  <tr style="border-top: 1px solid #ddd; font-weight: bold; font-size: 1.1em;">
                      <td style="padding-top: 8px;">Total Tagihan:</td>
-                     <td style="padding-left: 15px; padding-top: 8px;">Rp ${uniqueAmount.toLocaleString('id-ID')},-</td>
+                     <td style="padding-left: 15px; padding-top: 8px;">Rp ${formatCurrency(uniqueAmount)},-</td>
                  </tr>
             </table>
 
-            <p style="text-align: center; font-size: 1.1em;">Mohon transfer sejumlah <strong>Rp ${uniqueAmount.toLocaleString('id-ID')},-</strong> (persis) untuk mempercepat proses verifikasi otomatis.</p>
+            <p style="text-align: center; font-size: 1.1em;">Mohon transfer sejumlah <strong>Rp ${formatCurrency(uniqueAmount)},-</strong> (persis) untuk mempercepat proses verifikasi otomatis.</p>
             
             <div style="margin-top: 20px; padding: 15px; border: 1px solid #ddd; background-color: #f9f9f9;">
                  <h4>Instruksi Pembayaran:</h4>
@@ -491,16 +507,22 @@ function generateInvoiceHtml(params: GenerateInvoiceParams): string {
         <div class="email-wrapper">
             <div class="container">
                 <h1>Invoice Pendaftaran MVCU 2025</h1>
-                
-                <p>Yth. <strong>${contactPerson.name}</strong>,</p>
+                <div style="text-align: right; margin-bottom: 20px;">
+                    No: ${registrationNumber}<br>
+                    Tanggal Dibuat: ${registrationCreationTime instanceof Date && !isNaN(registrationCreationTime.getTime()) ? registrationCreationTime.toLocaleDateString('id-ID') : 'N/A'}<br>
+                    <strong style="color: orange;">Status: Belum Lunas</strong><br>
+                    ${paymentType !== 'sponsor' ? `Batas Pembayaran: ${paymentDeadline instanceof Date && !isNaN(paymentDeadline.getTime()) ? paymentDeadline.toLocaleDateString('id-ID') : 'N/A'}` : ''}
+                </div>
+                <div style="margin-bottom: 20px;">
+                <p>Yth. <strong>${contactPerson?.name ?? 'Peserta'}</strong>,</p>
                 <p>Terima kasih telah melakukan pendaftaran untuk The 1st Makassar Vascular Conference Update (MVCU) 2025. Berikut adalah detail pendaftaran dan instruksi pembayaran Anda:</p>
                 <p>Nomor Pendaftaran: <strong>${registrationNumber}</strong></p>
-                <p>Tanggal Pendaftaran: <strong>${registrationCreationTime.toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' })}</strong></p>
+                <p>Tanggal Pendaftaran: <strong>${registrationCreationTime instanceof Date && !isNaN(registrationCreationTime.getTime()) ? registrationCreationTime.toLocaleDateString('id-ID') : 'N/A'}</strong></p>
                 
                 <h2>Detail Kontak Pendaftar</h2>
-                <p>Nama: ${contactPerson.name}</p>
-                <p>Email: ${contactPerson.email}</p>
-                <p>Telepon: ${contactPerson.phone}</p>
+                <p>Nama: ${contactPerson?.name ?? 'N/A'}</p>
+                <p>Email: ${contactPerson?.email ?? 'N/A'}</p>
+                <p>Telepon: ${contactPerson?.phone ?? 'N/A'}</p>
 
                 <h2>Rincian Pemesanan</h2>
                 ${orderDetailsTableHtml}
@@ -623,6 +645,7 @@ export async function generateInvoicePdf(
     if (paymentType !== 'sponsor') {
         infoY = moveYDown(drawText(`Batas Pembayaran: ${paymentDeadline instanceof Date && !isNaN(paymentDeadline.getTime()) ? paymentDeadline.toLocaleDateString('id-ID') : 'N/A'}`, width - rightMargin, infoY, defaultFontSize, false, grayColor, 'right'), lineSpacing * 0.8);
     }
+    drawText('Status: Belum Lunas', width - rightMargin, infoY, defaultFontSize, true, rgb(1, 0.5, 0), 'right'); // <<< ADDED STATUS
 
     yPosition = moveYDown(yPosition, sectionSpacing); // Space before next section
 
@@ -645,13 +668,13 @@ export async function generateInvoicePdf(
     // Table Header
     const tableTopY = yPosition;
     const nameX = 50;
-    const itemX = 160; // Start Item column further right
+    const itemX = 155; // Start Item column further right
     const categoryX = 350; // Start Category column further right
-    const priceX = 450; // Start Price column
+    const priceX = 455; // Start Price column
     const nameWidth = 100; // Width for participant name column
-    const itemWidth = 180; // Width for item column
-    const categoryWidth = 90; // Width for category column
-    const priceWidth = 95; // Width for price column (right aligned)
+    const itemWidth = 190; // Width for item column
+    const categoryWidth = 100; // Width for category column
+    const priceWidth = 90; // Width for price column (right aligned)
     
     page.drawRectangle({ // Header Background
         x: leftMargin,
@@ -670,7 +693,7 @@ export async function generateInvoicePdf(
     let participantNameForCurrentRow = ''; // Name for the current participant being processed
 
     const drawRow = (item: string, category: string, price: number | string) => {
-        const priceString = typeof price === 'number' ? (price > 0 ? `Rp ${price.toLocaleString('id-ID')},-` : 'N/A') : price;
+        const priceString = typeof price === 'number' ? (price > 0 ? `Rp ${formatCurrency(price)}` : 'N/A') : price;
         const rowStartY = yPosition;
         
         // Use helper to draw text, adjusting y slightly for vertical center
@@ -693,7 +716,7 @@ export async function generateInvoicePdf(
     };
 
     // Iterate through participants and draw rows
-    participants.forEach(p => {
+    participants.forEach((p: Participant) => {
         const participantTypeDisplay = participantTypeMap[p.participant_type] || p.participant_type;
         participantNameForCurrentRow = p.full_name; // Set name for the first item
 
@@ -702,7 +725,7 @@ export async function generateInvoicePdf(
             const symposiumTitle = ticketData.name ?? 'Symposium'; // Use ticket title or placeholder
             let symposiumPrice = 0;
 
-            // --- Refactored Price Lookup (PDF) --- 
+            // --- Refactored Price Lookup --- 
             switch (p.participant_type) {
                 case 'specialist_doctor':
                     symposiumPrice = ticketData.price_specialist_doctor ?? 0;
@@ -716,14 +739,15 @@ export async function generateInvoicePdf(
                 case 'student':
                     symposiumPrice = ticketData.price_student ?? 0;
                     break;
-                case 'resident': // Assuming resident uses general_doctor price
+                case 'resident': // Assuming resident uses general_doctor price if not specified
                     symposiumPrice = ticketData.price_general_doctor ?? 0; 
                     break;
                 case 'other':
                     symposiumPrice = ticketData.price_other ?? 0;
                     break;
                 default:
-                    symposiumPrice = 0;
+                    console.warn(`Unknown participant type for price lookup: ${p.participant_type}`);
+                    symposiumPrice = 0; // Default to 0 if type not found
             }
             // --- End Refactor ---
 
@@ -732,7 +756,7 @@ export async function generateInvoicePdf(
 
         // Workshop Entries
         if (p.workshop_registrations && p.workshop_registrations.length > 0) {
-            p.workshop_registrations.forEach(ws => {
+            p.workshop_registrations.forEach((ws: { workshop_id: string }) => {
                 const workshop = workshopDetailsMap.get(ws.workshop_id);
                 const wsName = workshop?.name || `Workshop ${ws.workshop_id}`;
                 const wsPrice = workshop?.price ?? 0;
@@ -750,27 +774,27 @@ export async function generateInvoicePdf(
     // --- Totals Section --- (Right Aligned)
     if (paymentType !== 'sponsor') {
         const totalLabelX = 300;
-        const totalValueX = 450;
+        const totalValueX = 455;
         let totalY = yPosition;
 
         totalY = moveYDown(totalY, lineSpacing * 0.5); // Space before totals
 
         totalY = moveYDown(drawText('Subtotal:', totalLabelX, totalY, defaultFontSize, false), lineSpacing);
-        drawText(`Rp ${originalAmount.toLocaleString('id-ID')},-`, totalValueX, totalY + lineSpacing, defaultFontSize, false, grayColor, 'right'); 
+        drawText(`Rp ${formatCurrency(originalAmount)}`, totalValueX, totalY + lineSpacing, defaultFontSize, false, grayColor, 'right'); 
 
         totalY = moveYDown(drawText('Diskon:', totalLabelX, totalY, defaultFontSize, false), lineSpacing);
-        drawText(`- Rp ${discountAmount.toLocaleString('id-ID')},-`, totalValueX, totalY + lineSpacing, defaultFontSize, false, grayColor, 'right');
+        drawText(`- Rp ${formatCurrency(discountAmount)}`, totalValueX, totalY + lineSpacing, defaultFontSize, false, grayColor, 'right');
 
         totalY = moveYDown(drawText('Kode Unik Pengurang:', totalLabelX, totalY, defaultFontSize, false), lineSpacing);
         const actualUniqueDeduction = (originalAmount - discountAmount) - uniqueAmount; // Calculate actual deduction
-        drawText(`- Rp ${actualUniqueDeduction.toLocaleString('id-ID')},-`, totalValueX, totalY + lineSpacing, defaultFontSize, false, grayColor, 'right');
+        drawText(`- Rp ${formatCurrency(actualUniqueDeduction)}`, totalValueX, totalY + lineSpacing, defaultFontSize, false, grayColor, 'right');
 
         totalY = moveYDown(totalY, lineSpacing * 0.5); // Space before line
         page.drawLine({ start: { x: totalLabelX - 10, y: totalY }, end: { x: width - rightMargin, y: totalY }, thickness: 1, color: grayColor });
         totalY = moveYDown(totalY, lineSpacing * 0.7); // Space after line
 
-        drawText('Total Tagihan:', totalLabelX, totalY, defaultFontSize, true);
-        drawText(`Rp ${uniqueAmount.toLocaleString('id-ID')},-`, totalValueX, totalY, defaultFontSize, true, grayColor, 'right');
+        drawText('Total Tagihan:', totalLabelX, totalY, defaultFontSize, true, grayColor, 'right');
+        drawText(`Rp ${formatCurrency(uniqueAmount)}`, totalValueX, totalY, defaultFontSize, true, grayColor, 'right');
         yPosition = moveYDown(totalY, sectionSpacing); // Move main Y down past totals
     } else {
          yPosition = moveYDown(yPosition, lineSpacing); // Add some space even if sponsor
@@ -781,7 +805,7 @@ export async function generateInvoicePdf(
     yPosition = moveYDown(yPosition, lineSpacing * 0.8);
 
     if (paymentType !== 'sponsor') {
-        yPosition = moveYDown(drawText(`Mohon transfer SEJUMLAH PERSIS: Rp ${uniqueAmount.toLocaleString('id-ID')},-`, leftMargin + 10, yPosition), lineSpacing * 0.8);
+        yPosition = moveYDown(drawText(`Mohon transfer SEJUMLAH PERSIS: Rp ${formatCurrency(uniqueAmount)}`, leftMargin + 10, yPosition), lineSpacing * 0.8);
         yPosition = moveYDown(drawText(`Batas Waktu Pembayaran: ${paymentDeadline instanceof Date && !isNaN(paymentDeadline.getTime()) ? paymentDeadline.toLocaleDateString('id-ID') : 'N/A'}`, leftMargin + 10, yPosition), lineSpacing * 0.8);
         if (bankAccount) {
              yPosition = moveYDown(drawText(`Ke Rekening Bank ${bankAccount.bank_name}:`, leftMargin + 10, yPosition), lineSpacing * 0.8);
@@ -801,7 +825,7 @@ export async function generateInvoicePdf(
     if (paymentType !== 'sponsor') { 
         yPosition = moveYDown(drawText('- Pastikan jumlah transfer sesuai hingga digit terakhir untuk verifikasi otomatis.', leftMargin + 10, yPosition, smallFontSize), lineSpacing * 0.7);
         yPosition = moveYDown(drawText('- Pembayaran diverifikasi dalam 1x24 jam hari kerja.', leftMargin + 10, yPosition, smallFontSize), lineSpacing * 0.7);
-        yPosition = moveYDown(drawText('- Anda akan menerima email konfirmasi & tiket elektronik setelah pembayaran terverifikasi.', leftMargin + 10, yPosition, smallFontSize), lineSpacing * 0.7);
+        yPosition = moveYDown(drawText('- Anda akan menerima email konfirmasi & tiket elektronik setelah pembayaran berhasil diverifikasi.', leftMargin + 10, yPosition, smallFontSize), lineSpacing * 0.7);
     } else {
         yPosition = moveYDown(drawText('- Konfirmasi pendaftaran akan dikirim setelah sponsor melakukan pembayaran.', leftMargin + 10, yPosition, smallFontSize), lineSpacing * 0.7);
     }
@@ -813,4 +837,233 @@ export async function generateInvoicePdf(
 
     const pdfBytes = await pdfDoc.save();
     return Buffer.from(pdfBytes); // Ensure return type is Buffer
+}
+
+export async function generatePaidInvoicePdf(
+    params: GeneratePaidInvoiceParams
+): Promise<Buffer> {
+    const {
+        registrationNumber,
+        registrationCreationTime,
+        // paymentDeadline, // Not needed for paid invoice
+        contactPerson,
+        // paymentType, // Not strictly needed, but keep for context?
+        originalAmount,
+        discountAmount,
+        // uniqueDeduction, // Not relevant for paid invoice display
+        uniqueAmount, // Final paid amount
+        participants,
+        ticketData,
+        workshopDetailsMap,
+        participantTypeMap,
+        qrCodeData, // <<< New parameter
+        // bankAccount // Not needed for paid invoice
+    } = params;
+
+    console.log(`Generating PAID PDF Invoice for ${registrationNumber}`);
+    const doc = new PDFDocument({ size: 'A4', margin: 50 });
+    const chunks: Uint8Array[] = [];
+    doc.on('data', (chunk) => chunks.push(chunk));
+
+    const lightGrayColor = '#D3D3D3';
+    const grayColor = '#555555';
+    const greenColor = '#008000'; // Green for 'Lunas'
+    const defaultFontSize = 10;
+    const titleFontSize = 18;
+    const headerFontSize = 12;
+    const lineSpacing = 15;
+    const sectionSpacing = 25;
+    const leftMargin = 50;
+    const rightMargin = 50;
+    const width = doc.page.width;
+
+    // --- Header --- (Logo Placeholder, Invoice Details)
+    // Placeholder for Logo
+    doc.rect(leftMargin, leftMargin, 150, 50).stroke(lightGrayColor);
+    doc.fontSize(10).fillColor(grayColor).text('Logo', leftMargin + 55, leftMargin + 20);
+
+    // Invoice Details (Right Aligned)
+    let yPosition = leftMargin;
+    doc.fillColor('black').font('Helvetica-Bold').fontSize(titleFontSize).text('INVOICE', { align: 'right' });
+    doc.moveDown(0.5);
+    doc.font('Helvetica').fontSize(defaultFontSize);
+    doc.text(`No: ${registrationNumber}`, { align: 'right' });
+    doc.text(`Tanggal Dibuat: ${registrationCreationTime instanceof Date && !isNaN(registrationCreationTime.getTime()) ? registrationCreationTime.toLocaleDateString('id-ID') : 'N/A'}`, { align: 'right' });
+    doc.font('Helvetica-Bold').fillColor(greenColor).text('Status: Lunas', { align: 'right' }); // <<< LUNAS STATUS
+    doc.fillColor('black').font('Helvetica'); // Reset color
+    yPosition = doc.y + sectionSpacing; // Update Y position
+
+    // --- Billing Info --- (Ditagihkan Kepada)
+    doc.font('Helvetica-Bold').fontSize(headerFontSize).text('Ditagihkan Kepada:', leftMargin, yPosition);
+    doc.font('Helvetica').fontSize(defaultFontSize);
+    doc.text(contactPerson?.name ?? 'N/A', leftMargin);
+    doc.text(contactPerson?.email ?? 'N/A', leftMargin);
+    doc.text(contactPerson?.phone ?? 'N/A', leftMargin);
+    yPosition = doc.y + sectionSpacing;
+
+    // --- Rincian Pemesanan Table ---
+    doc.font('Helvetica-Bold').fontSize(headerFontSize).text('Rincian Pemesanan:', leftMargin, yPosition, { underline: true });
+    doc.moveDown(1.5);
+    yPosition = doc.y;
+
+    const tableTop = yPosition;
+    const nameX = 50;         const nameWidth = 100;
+    const itemX = 155;        const itemWidth = 190;
+    const categoryX = 350;    const categoryWidth = 100;
+    const priceX = 455;       const priceWidth = 90;
+    const rowHeight = 20;
+
+    // Table Header
+    doc.fontSize(10).font('Helvetica-Bold');
+    doc.text('Nama Peserta', nameX, tableTop, { width: nameWidth });
+    doc.text('Item', itemX, tableTop, { width: itemWidth });
+    doc.text('Kategori', categoryX, tableTop, { width: categoryWidth });
+    doc.text('Harga (IDR)', priceX, tableTop, { width: priceWidth, align: 'right' });
+    doc.moveTo(nameX, doc.y).lineTo(priceX + priceWidth, doc.y).stroke();
+    doc.moveDown(0.5);
+    doc.font('Helvetica');
+    let currentY = doc.y;
+
+    // Table Rows (Loop through participants and items)
+    participants.forEach((p: Participant) => {
+        const participantTypeDisplay = participantTypeMap[p.participant_type] || p.participant_type;
+        let firstItem = true;
+
+        // Add Symposium if attending
+        if (p.attendSymposium && ticketData) {
+            let symposiumPrice = 0;
+            switch (p.participant_type) {
+                case 'specialist_doctor': symposiumPrice = ticketData.price_specialist_doctor ?? 0; break;
+                case 'general_doctor': symposiumPrice = ticketData.price_general_doctor ?? 0; break;
+                case 'nurse': symposiumPrice = ticketData.price_nurse ?? 0; break;
+                case 'student': symposiumPrice = ticketData.price_student ?? 0; break;
+                case 'other': symposiumPrice = ticketData.price_other ?? 0; break;
+                default: symposiumPrice = ticketData.price_other ?? 0; // Default or handle error
+            }
+            const symposiumTitle = ticketData?.name ?? 'Symposium';
+            const nameText = firstItem ? p.full_name || 'N/A' : '';
+            const symposiumName = symposiumTitle;
+            const categoryText = participantTypeDisplay;
+            const priceText = symposiumPrice > 0 ? formatCurrency(symposiumPrice) : 'N/A';
+
+            const nameHeight = doc.heightOfString(nameText, { width: nameWidth });
+            const itemHeight = doc.heightOfString(symposiumName, { width: itemWidth });
+            const categoryHeight = doc.heightOfString(categoryText, { width: categoryWidth });
+            const currentActualRowHeight = Math.max(nameHeight, itemHeight, categoryHeight, rowHeight);
+
+            doc.text(nameText, nameX, currentY, { width: nameWidth, lineBreak: true });
+            doc.text(symposiumName, itemX, currentY, { width: itemWidth, lineBreak: true });
+            doc.text(categoryText, categoryX, currentY, { width: categoryWidth, lineBreak: true });
+            doc.text(priceText, priceX, currentY, { width: priceWidth, align: 'right' });
+
+            currentY += currentActualRowHeight + 5;
+            firstItem = false;
+        }
+
+        // Add Workshops
+        if (p.workshop_registrations && p.workshop_registrations.length > 0) {
+            p.workshop_registrations.forEach((reg: { workshop_id: string }) => {
+                const workshop = workshopDetailsMap.get(reg.workshop_id);
+                const wsName = workshop?.name ?? 'Workshop Tidak Ditemukan';
+                const wsPrice = workshop?.price ?? 0;
+
+                const nameText = firstItem ? p.full_name || 'N/A' : '';
+                const workshopName = wsName;
+                const categoryText = participantTypeDisplay;
+                const priceText = formatCurrency(wsPrice);
+
+                const nameHeight = doc.heightOfString(nameText, { width: nameWidth });
+                const itemHeight = doc.heightOfString(workshopName, { width: itemWidth });
+                const categoryHeight = doc.heightOfString(categoryText, { width: categoryWidth });
+                const currentActualRowHeight = Math.max(nameHeight, itemHeight, categoryHeight, rowHeight);
+
+                doc.text(nameText, nameX, currentY, { width: nameWidth, lineBreak: true });
+                doc.text(workshopName, itemX, currentY, { width: itemWidth, lineBreak: true });
+                doc.text(categoryText, categoryX, currentY, { width: categoryWidth, lineBreak: true });
+                doc.text(priceText, priceX, currentY, { width: priceWidth, align: 'right' });
+
+                currentY += currentActualRowHeight + 5;
+                firstItem = false;
+            });
+        }
+        // Add small gap between participants if needed
+        currentY += 5;
+    });
+
+    yPosition = currentY + 10; // Update Y position after table
+
+    // --- Summary Section ---
+    const summaryLabelX = 300;
+    const summaryValueX = 455;
+    let summaryCurrentY = yPosition;
+    const lineSpacingSummary = 15;
+
+    doc.font('Helvetica-Bold').text('Subtotal:', summaryLabelX, summaryCurrentY, { width: 140, align: 'right' });
+    doc.font('Helvetica').text(`Rp ${formatCurrency(originalAmount)}`, summaryValueX, summaryCurrentY, { width: 90, align: 'right' });
+    summaryCurrentY += lineSpacingSummary;
+
+    if (discountAmount && discountAmount > 0) {
+        doc.font('Helvetica-Bold').text('Diskon:', summaryLabelX, summaryCurrentY, { width: 140, align: 'right' });
+        doc.font('Helvetica').text(`- Rp ${formatCurrency(discountAmount)}`, summaryValueX, summaryCurrentY, { width: 90, align: 'right' });
+        summaryCurrentY += lineSpacingSummary;
+    }
+
+    // No unique deduction line for paid invoice
+
+    doc.moveTo(summaryLabelX - 10, summaryCurrentY)
+       .lineTo(summaryValueX + 90, summaryCurrentY)
+       .stroke(grayColor);
+    summaryCurrentY += 5;
+
+    doc.font('Helvetica-Bold').fontSize(11).text('Total Dibayar:', summaryLabelX, summaryCurrentY, { width: 140, align: 'right' });
+    doc.font('Helvetica-Bold').fontSize(11).text(`Rp ${formatCurrency(uniqueAmount)}`, summaryValueX, summaryCurrentY, { width: 90, align: 'right' });
+    summaryCurrentY += lineSpacingSummary + 10;
+    yPosition = summaryCurrentY;
+
+    // --- QR Code Section ---
+    try {
+        const qrCodeDataUrl = await QRCode.toDataURL(qrCodeData, { errorCorrectionLevel: 'H', margin: 2 });
+        doc.addPage(); // Add new page for QR Code and ticket info
+        yPosition = leftMargin;
+
+        doc.font('Helvetica-Bold').fontSize(headerFontSize).text('Tiket Digital / QR Code Check-in', leftMargin, yPosition);
+        doc.moveDown(1);
+        yPosition = doc.y;
+
+        // Embed QR code
+        doc.image(qrCodeDataUrl, {
+            fit: [150, 150], // Adjust size as needed
+            align: 'center',
+            valign: 'center'
+        });
+        yPosition = doc.y + 160; // Position below QR code image estimate
+
+        // Optionally display the QR data (e.g., Ticket ID) below the code
+        doc.font('Helvetica').fontSize(defaultFontSize).text(`Kode: ${qrCodeData}`, { align: 'center' });
+        yPosition = doc.y + sectionSpacing;
+
+        doc.font('Helvetica').fontSize(defaultFontSize).text(
+            'Harap tunjukkan QR Code ini kepada petugas saat melakukan registrasi ulang (check-in) di lokasi acara. '
+            + 'Simpan email ini atau screenshot halaman ini.', 
+            leftMargin, 
+            yPosition, 
+            { align: 'left', width: width - leftMargin - rightMargin } 
+        );
+
+    } catch (err) {
+        console.error('Failed to generate QR code:', err);
+        // Optionally add text to PDF indicating QR generation failure
+        doc.text('Gagal membuat QR Code.', { align: 'center' });
+    }
+
+    // Finalize PDF
+    doc.end();
+
+    // Wait for stream to finish and return buffer
+    return new Promise((resolve, reject) => {
+        doc.on('end', () => {
+            resolve(Buffer.concat(chunks));
+        });
+        doc.on('error', reject);
+    });
 }
