@@ -293,9 +293,6 @@ export async function POST(request: Request) {
     const registrationId = registration.id
     console.log("Registration created successfully with ID:", registrationId)
 
-    // Initialize an array to store participant IDs
-    const createdParticipantIds: string[] = []
-
     // --- Step 2: Create Participant Records and link to Registration --- 
     // Validasi apakah participants array ada dan valid
     if (!registrationData.participants || !Array.isArray(registrationData.participants) || registrationData.participants.length === 0) {
@@ -315,6 +312,7 @@ export async function POST(request: Request) {
     }
     
     // Process each participant and insert into participants table
+    const createdParticipantIds: string[] = []
     for (const participant of registrationData.participants) {
       try {
         // Log raw participant data untuk debugging
@@ -612,36 +610,62 @@ export async function POST(request: Request) {
       await schedulePaymentCheck(registrationId)
     }
 
-    // --- Step 4: Send Initial Invoice --- 
-    // Prepare data for invoice generation
-    const invoiceParams = {
-      registrationId: registrationId,
-      registrationNumber: registrationNumber,
-      amount: uniqueFinalAmount,
-      originalAmount: finalAmount,
-      deduction: uniqueDeduction,
-      paymentType: registrationData.payment_type,
-      participants: registrationData.participants
+    // --- Insert Contact Person if provided ---
+    const contactPersonFromRequest = registrationData.contact_person;
+    if (contactPersonFromRequest && contactPersonFromRequest.email) {
+      console.log(`Attempting to insert contact person data for registration ${registrationId}...`);
+      const { data: contactPersonData, error: contactPersonError } = await supabaseAdmin
+        .from('contact_persons')
+        .insert({
+          registration_id: registrationId,
+          name: contactPersonFromRequest.name,
+          email: contactPersonFromRequest.email,
+          phone: contactPersonFromRequest.phone,
+        })
+        .select()
+        .single();
+
+      if (contactPersonError) {
+        console.error(`Error inserting contact person for registration ${registrationId}:`, contactPersonError);
+        // Decide if this should be a critical error or just logged
+        // For now, log and continue, email might still fail later
+      } else {
+        console.log(`Contact person inserted successfully for registration ${registrationId}:`, contactPersonData);
+      }
+    } else {
+      console.log(`No contact person data provided in request for registration ${registrationId}, skipping insert.`);
     }
 
-    // Send registration invoice email asynchronously
-    if (registrationData.contact_person && registrationData.contact_person.email) {
-      // Fire-and-forget: Don't await this promise
+    // --- Send registration invoice email asynchronously ---
+    // Check again if contact person email exists before sending
+    if (contactPersonFromRequest && contactPersonFromRequest.email) {
+      const recipientEmail = contactPersonFromRequest.email;
+      console.log(`Attempting to send invoice to contact person: ${recipientEmail} for registration ${registrationId}`);
+
+      // Prepare arguments for the function call based on its definition
+      const originalAmount = registrationData.totalAmount ?? 0;
+      const discountAmount = registrationData.discount_amount ?? 0; // Assuming discount_amount is available or default to 0
+      const uniqueAmount = paymentData.amount ?? 0;
+      const uniqueDeduction = originalAmount - uniqueAmount;
+      const paymentType = paymentData.payment_method ?? 'unknown';
+      const originalParticipantsData = registrationData.participants ?? [];
+
+      // Fire-and-forget: Don't await this promise. Call with individual arguments.
       sendRegistrationInvoice(
-        invoiceParams.registrationId, 
-        invoiceParams.registrationNumber, 
-        invoiceParams.amount, 
-        invoiceParams.originalAmount, 
-        invoiceParams.deduction, 
-        invoiceParams.paymentType,
-        invoiceParams.participants
+        registrationId,                      // registrationId: string
+        registration.registration_number,    // registrationNumber: string
+        originalAmount,                      // originalAmount: number
+        discountAmount,                      // discountAmount: number
+        uniqueDeduction,                     // uniqueDeduction: number
+        paymentType,                         // paymentType: string
+        originalParticipantsData             // originalParticipantsData: any[]
       ).catch(emailError => {
         // Log error if sending email fails, but don't block response
-        console.error(`Error sending registration invoice for ${invoiceParams.registrationId}:`, emailError);
+        console.error(`Error sending registration invoice for ${registrationId} to ${recipientEmail}:`, emailError);
       });
-      console.log(`Initiated async invoice email send for registration ${invoiceParams.registrationId} to ${registrationData.contact_person.email}`);
+      console.log(`Initiated async invoice email send for registration ${registrationId} to ${recipientEmail}`);
     } else {
-      console.warn(`No contact person email found for registration ${invoiceParams.registrationId}, skipping invoice email.`);
+      console.warn(`No valid contact_person with email found in registrationData for ${registrationId}, skipping invoice email.`);
     }
 
     return NextResponse.json({

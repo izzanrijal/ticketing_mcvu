@@ -130,9 +130,9 @@ serve(async (req: Request) => {
     const participantData = registrationData.participants[0];
     const contactPerson = registrationData.contact_persons[0] as ContactPerson; 
 
-    if (!participantData || !participantData.email || !participantData.qr_code_url) {
-        console.error('Participant data incomplete or missing email/QR code URL');
-        return new Response(JSON.stringify({ error: 'Participant data incomplete (missing email or QR code)' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    if (!participantData || !participantData.email) { 
+        console.error('Participant data incomplete or missing email');
+        return new Response(JSON.stringify({ error: 'Participant data incomplete' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
 
     const { data: ticketData, error: ticketError } = await supabaseAdmin
@@ -163,25 +163,9 @@ serve(async (req: Request) => {
 
     const participantWithWorkshops = participantData as Participant & { workshop_registrations?: WorkshopRegistration[] }; 
 
-    const pdfParams: GeneratePdfParams = {
-        registrationNumber: registrationData.registration_number,
-        registrationCreationTime: new Date(registrationData.created_at),
-        contactPerson: contactPerson, 
-        originalAmount: registrationData.total_amount,
-        discountAmount: registrationData.discount_amount,
-        uniqueAmount: registrationData.unique_amount, 
-        participants: [participantData], 
-        ticketData: ticketData,
-        workshopDetailsMap: workshopDetailsMap,
-        participantTypeMap: participantTypeMap,
-        qrCodeData: participantData.qr_code_url 
-    };
-
-    const pdfBuffer = await generatePaidInvoicePdfInternal(pdfParams); 
- 
     const emailSubject = `Konfirmasi Pembayaran & Tiket MVCU 2025 - ${registrationData.registration_number}`;
-    
-    // --- Generate Correct QR Code Data URL ---
+
+    // --- Generate Correct QR Code Data URL --- (Define payload first)
     const qrDataPayload = JSON.stringify({
       id: participantData.id,
       name: participantData.full_name,
@@ -189,9 +173,27 @@ serve(async (req: Request) => {
       registration_number: registrationData.registration_number,
       participant_type: participantData.participant_type
     });
-    console.log(`Generating QR code image for payload: ${qrDataPayload}`);
+    console.log(`Generating QR code image for payload: ${qrDataPayload}`); 
     const qrCodeDataUrl = await QRCode.toDataURL(qrDataPayload, { errorCorrectionLevel: 'H', margin: 2 });
-    // ----------------------------------------
+
+    // --- Generate PDF Buffer --- 
+    const pdfParams: GeneratePdfParams = {
+      registrationNumber: registrationData.registration_number,
+      registrationCreationTime: new Date(registrationData.created_at),
+      contactPerson: contactPerson ?? null,
+      originalAmount: registrationData.total_amount ?? 0,
+      discountAmount: registrationData.discount_amount ?? 0,
+      uniqueAmount: registrationData.final_amount ?? 0,
+      participants: registrationData.participants, 
+      ticketData: ticketData ?? null, 
+      workshopDetailsMap: workshopDetailsMap, 
+      participantTypeMap: participantTypeMap, 
+      qrCodeData: qrCodeDataUrl 
+    };
+    console.log("Preparing to generate PDF with params:", pdfParams);
+    const pdfBuffer = await generateInvoicePdf(pdfParams);
+    console.log(`PDF Buffer generated, length: ${pdfBuffer.byteLength}`);
+    // -------------------------
 
     const emailHtml = `
         <p>Yth. <strong>${participantData.full_name}</strong>,</p>
@@ -418,4 +420,8 @@ async function generatePaidInvoicePdfInternal(params: GeneratePdfParams): Promis
       offset += chunk.length;
     }
     return Buffer.from(resultBuffer); 
+}
+
+async function generateInvoicePdf(params: GeneratePdfParams): Promise<Buffer> {
+    return await generatePaidInvoicePdfInternal(params);
 }

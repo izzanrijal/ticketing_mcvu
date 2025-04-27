@@ -1,5 +1,5 @@
-"use client"
-
+"use client"; // Re-add the missing directive
+import React from 'react'; // Add missing React import
 import { useEffect, useState, useCallback } from "react"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { Download, Search } from "lucide-react"
@@ -39,6 +39,15 @@ interface ParticipantData {
   payment_note: string | null; // Note from payments table
 }
 
+// Define participant type mapping for display
+const participantTypeMap: { [key: string]: string } = {
+  'specialist_doctor': 'Dokter Spesialis',
+  'general_doctor': 'Dokter Umum',
+  'nurse': 'Perawat',
+  'student': 'Mahasiswa',
+  'other': 'Lainnya',
+};
+
 export function AdminParticipants() {
   const [participants, setParticipants] = useState<ParticipantData[]>([])
   const [loading, setLoading] = useState(true)
@@ -53,6 +62,7 @@ export function AdminParticipants() {
   const [isFetchingDetails, setIsFetchingDetails] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false); // For verification loading state
+  const [isResending, setIsResending] = useState<string | null>(null); // Store participant ID being resent
 
   const supabase = createClientComponentClient()
 
@@ -143,9 +153,9 @@ export function AdminParticipants() {
       "Email",
       "Telepon",
       "Institusi",
+      "Kategori Peserta", // New header
       "Status Registrasi",
       "Catatan Pembayaran", // Added notes header
-      "Tipe Peserta", // Add back participant type if needed
       "Tanggal Registrasi" // Add registration date if needed
     ];
 
@@ -158,9 +168,9 @@ export function AdminParticipants() {
       p.email ?? 'N/A',
       p.phone ?? 'N/A',
       p.institution ?? 'N/A',
+      p.participant_type ? (participantTypeMap[p.participant_type] || p.participant_type) : '-', // New data
       p.registration_status ?? 'N/A',
       p.payment_note ?? '-', // Use payment_note
-      p.participant_type ?? 'N/A', // Add participant_type if needed
       p.registration_date ? new Date(p.registration_date).toLocaleDateString('id-ID') : 'N/A' // Format date
     ]);
 
@@ -336,38 +346,41 @@ export function AdminParticipants() {
   useEffect(() => {
     if (showManualVerifyModal && selectedParticipant?.registration_number) {
       const fetchDetails = async () => {
+        if (!selectedParticipant || !selectedParticipant.registration_id) return;
+
+        console.log(`Fetching details for registration_id: ${selectedParticipant.registration_id}`);
         setIsFetchingDetails(true);
         setFetchError(null);
-        setOrderDetails(null); // Clear previous details
-        console.log(`Fetching details for reg number: ${selectedParticipant.registration_number}`);
+        setOrderDetails(null);
+
         try {
-          // Placeholder: Replace with actual Supabase query or function call
-          // This query needs to get registration(s), participant(s), workshop(s), pricing details
-          // based on the registration_number.
-          // Example structure of expected data:
-          await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate network delay
-          const mockDetails = {
-            registrationNumber: selectedParticipant.registration_number,
-            participants: [selectedParticipant.full_name], // Fetch all participants with this reg number
-            items: [
-              { name: 'Symposium Access', price: 1000000 },
-              { name: 'Workshop A', price: 500000 }
-            ],
-            totalAmount: 1500000, 
-            // Add other relevant details: payment method, status etc.
-          };
-          setOrderDetails(mockDetails);
+          const { data, error } = await supabase
+            .from('registrations')
+            .select(`
+              *,
+              participants(*),
+              contact_persons(*),
+              transactions(*)
+            `)
+            .eq('id', selectedParticipant.registration_id)
+            .single();
 
-          // TODO: Replace with actual Supabase call, e.g.:
-          // const { data, error } = await supabase.rpc('get_registration_details', { 
-          //   registration_number_input: selectedParticipant.registration_number 
-          // });
-          // if (error) throw error;
-          // setOrderDetails(data);
+          if (error) {
+            console.error('Supabase error fetching registration details:', JSON.stringify(error, null, 2)); // Log specific error
+            throw new Error(`Gagal memuat detail registrasi: ${error.message}`);
+          }
 
-        } catch (error: any) {
-          console.error("Error fetching order details:", error);
-          setFetchError("Gagal memuat detail pesanan.");
+          if (!data) {
+             throw new Error('Data registrasi tidak ditemukan.');
+          }
+
+          console.log('Fetched registration details:', data);
+          setOrderDetails(data as OrderDetails);
+
+        } catch (err: any) {
+          console.error("Error fetching registration details:", err);
+          setFetchError(err.message || 'Gagal memuat detail registrasi.');
+          toast({ title: "Error", description: err.message || 'Gagal memuat detail registrasi.', variant: "destructive" });
         } finally {
           setIsFetchingDetails(false);
         }
@@ -375,6 +388,44 @@ export function AdminParticipants() {
       fetchDetails();
     }
   }, [showManualVerifyModal, selectedParticipant, supabase]);;
+
+  // Handler function to resend the paid invoice/ticket
+  const handleResendPaidInvoice = async (participant: ParticipantData) => {
+    if (!participant.registration_id || !participant.id) {
+      toast({ title: "Error", description: "ID Registrasi atau Peserta tidak ditemukan.", variant: "destructive" });
+      return;
+    }
+
+    console.log(`Attempting to resend paid invoice for participant: ${participant.id} on registration: ${participant.registration_id}`);
+    setIsResending(participant.id); // Set loading state for this specific participant
+
+    try {
+      const { error: functionError } = await supabase.functions.invoke('send-paid-invoice', {
+        body: { 
+          registrationId: participant.registration_id, 
+          participantId: participant.id 
+        }
+      });
+
+      if (functionError) {
+        console.error('Error invoking send-paid-invoice function:', functionError);
+        throw new Error(functionError.message || 'Gagal memanggil fungsi kirim ulang.');
+      }
+
+      console.log(`Resend function invoked successfully for participant: ${participant.id}`);
+      toast({ title: "Sukses", description: `Email tiket/invoice untuk ${participant.full_name} sedang dikirim ulang.` });
+
+    } catch (error: any) {
+      console.error("Error during resend paid invoice:", error);
+       toast({ 
+          title: "Gagal Kirim Ulang", 
+          description: error.message || 'Unknown error',
+          variant: "destructive"
+      });
+    } finally {
+      setIsResending(null); // Clear loading state
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -421,6 +472,7 @@ export function AdminParticipants() {
               <TableHead>Email</TableHead>
               <TableHead>Telepon</TableHead>
               <TableHead>Institusi</TableHead>
+              <TableHead>Kategori Peserta</TableHead> {/* New Header */}
               <TableHead>Status Registrasi</TableHead>
               <TableHead>Catatan Pembayaran</TableHead>
               <TableHead className="text-right">Aksi</TableHead>
@@ -430,12 +482,12 @@ export function AdminParticipants() {
             {loading ? (
               [...Array(5)].map((_, i) => (
                 <TableRow key={i}>
-                  <TableCell colSpan={10} className="h-12 animate-pulse bg-muted"></TableCell>
+                  <TableCell colSpan={11} className="h-12 animate-pulse bg-muted"></TableCell>
                 </TableRow>
               ))
             ) : participants.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} className="h-24 text-center">
+                <TableCell colSpan={11} className="h-24 text-center">
                   Tidak ada data peserta
                 </TableCell>
               </TableRow>
@@ -452,49 +504,62 @@ export function AdminParticipants() {
                       : 'destructive');
 
                 return (
-                  <TableRow key={p.participant_id}> 
-                    <TableCell>{p.registration_number ?? 'N/A'}</TableCell>
-                    <TableCell>{p.qr_code_id ?? 'N/A'}</TableCell>
-                    <TableCell>{p.full_name ?? 'N/A'}</TableCell>
-                    <TableCell>{p.nik ?? 'N/A'}</TableCell>
-                    <TableCell>{p.email ?? 'N/A'}</TableCell>
-                    <TableCell>{p.phone ?? 'N/A'}</TableCell>
-                    <TableCell>{p.institution ?? 'N/A'}</TableCell>
-                    <TableCell>
-                      <Badge variant={badgeVariant}>
-                        {p.registration_status ?? 'N/A'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{p.payment_note ?? '-'}</TableCell>
-                    <TableCell className="text-right">{
-                      /* Check status strictly for button rendering */
-                      (p.registration_status === 'pending' || p.registration_status === 'pending verification') ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedParticipant(p);
-                            setShowManualVerifyModal(true);
-                          }}
-                          disabled={isVerifying}
-                        >
-                          Verifikasi Manual
-                        </Button>
-                      ) : p.registration_status === 'verified' ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleResendEmail(p.participant_id!, p.email!)}
-                          disabled={resendingEmail[p.participant_id!]}
-                        >
-                          {resendingEmail[p.participant_id!] ? "Mengirim..." : "Kirim Ulang Email"}
-                        </Button>
-                      ) : (
-                        <span>-</span> // Default case
-                      )
-                    }</TableCell>
-                  </TableRow>
-                );
+                  <React.Fragment key={p.participant_id}><TableRow>
+                      <TableCell>{p.registration_number ?? 'N/A'}</TableCell>
+                      <TableCell>{p.qr_code_id ?? 'N/A'}</TableCell>
+                      <TableCell>{p.full_name ?? 'N/A'}</TableCell>
+                      <TableCell>{p.nik ?? 'N/A'}</TableCell>
+                      <TableCell>{p.email ?? 'N/A'}</TableCell>
+                      <TableCell>{p.phone ?? 'N/A'}</TableCell>
+                      <TableCell>{p.institution ?? 'N/A'}</TableCell>
+                      <TableCell>{p.participant_type ? (participantTypeMap[p.participant_type] || p.participant_type) : '-'}</TableCell>
+                      <TableCell><Badge variant={badgeVariant === 'success' ? 'default' : badgeVariant}>{p.registration_status ?? 'N/A'}</Badge></TableCell>
+                      <TableCell>{p.payment_note ?? '-'}</TableCell>
+                      <TableCell className="text-right">
+                      {(() => {
+                        // Explicitly check registration_status and render the appropriate button
+                        if (p.registration_status === 'paid') {
+                          return (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => { 
+                                console.log(`DEBUG: Resend Ticket button clicked for participant: ${p.id}`); // Keep log
+                                handleResendPaidInvoice(p); 
+                              }} 
+                              disabled={isResending === p.id}
+                            >
+                              {isResending === p.id ? <ReloadIcon className="mr-2 h-4 w-4 animate-spin" /> : null}Kirim Ulang Tiket
+                            </Button>
+                          );
+                        } else if (p.registration_status === 'pending' || p.registration_status === 'pending verification') {
+                          return (
+                            <Button variant="outline" size="sm" onClick={() => { setSelectedParticipant(p); setShowManualVerifyModal(true); }} disabled={isVerifying}>
+                              Verifikasi Manual
+                            </Button>
+                          );
+                        } else if (p.registration_status === 'verified') {
+                          // Assuming handleResendEmail and resendingEmail state exist from previous context
+                          // Ensure participant_id and email are not null/undefined before calling
+                          const canResendVerification = p.participant_id && p.email;
+                          return (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => canResendVerification && handleResendEmail(p.participant_id!, p.email!)} 
+                              disabled={!canResendVerification || resendingEmail[p.participant_id!] }
+                            >
+                              {resendingEmail[p.participant_id!] ? "Mengirim..." : "Kirim Ulang Email"}
+                            </Button>
+                          );
+                        } else {
+                          // Default case if status doesn't match known actions
+                          return <span>-</span>;
+                        }
+                      })()}
+                      </TableCell>
+                    </TableRow></React.Fragment>
+                )
               })
             )}
           </TableBody>
