@@ -9,7 +9,15 @@ const corsHeaders = {
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
 const RESEND_API_URL = 'https://api.resend.com/emails';
 
-serve(async (req) => {
+// Helper function for error responses
+const errorResponse = (message: string, status: number) => {
+  return new Response(JSON.stringify({ error: message }), {
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    status: status,
+  });
+};
+
+serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', {
       headers: corsHeaders
@@ -22,27 +30,19 @@ serve(async (req) => {
     try {
       payload = JSON.parse(bodyText);
     } catch (e) {
-      return new Response(JSON.stringify({ 
-        error: `Invalid JSON: ${e.message}` 
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400
-      });
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      return errorResponse(`Invalid JSON: ${errorMessage}`, 400);
     }
 
     const { participantId, registrationId } = payload;
 
     if (!participantId || !registrationId) {
-      return new Response(JSON.stringify({ 
-        error: 'Missing participantId or registrationId' 
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400
-      });
+      return errorResponse('Missing participantId or registrationId', 400);
     }
 
     if (!RESEND_API_KEY) {
-      throw new Error("Missing environment variable RESEND_API_KEY");
+      console.error("Missing environment variable RESEND_API_KEY");
+      return errorResponse("Email service configuration error.", 500);
     }
 
     const supabaseAdmin = createClient(
@@ -57,12 +57,7 @@ serve(async (req) => {
       .single();
 
     if (participantError || !participantData) {
-      return new Response(JSON.stringify({ 
-        error: `Failed to fetch participant: ${participantError?.message}` 
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500
-      });
+      return errorResponse(`Failed to fetch participant: ${participantError?.message}`, 500);
     }
 
     const { data: registrationData, error: registrationError } = await supabaseAdmin
@@ -72,12 +67,7 @@ serve(async (req) => {
       .single();
 
     if (registrationError || !registrationData) {
-      return new Response(JSON.stringify({ 
-        error: `Failed to fetch registration: ${registrationError?.message}` 
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500
-      });
+      return errorResponse(`Failed to fetch registration: ${registrationError?.message}`, 500);
     }
 
     const { data: qrCodeData, error: qrCodeError } = await supabaseAdmin
@@ -88,50 +78,50 @@ serve(async (req) => {
       .maybeSingle();
 
     if (qrCodeError) {
-      return new Response(JSON.stringify({ 
-        error: `Failed to fetch QR code: ${qrCodeError.message}` 
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500
-      });
+      return errorResponse(`Failed to fetch QR code: ${qrCodeError.message}`, 500);
     }
 
     let qrCodeId = "N/A";
-    let qrCodeUrl = "";
+    let qrCodeUrl = ""; // Final URL to use in img tag
 
     if (qrCodeData && qrCodeData.qr_code_id) {
       qrCodeId = qrCodeData.qr_code_id;
 
-      if (!qrCodeData.qr_code_url) {
+      if (qrCodeData.qr_code_url && qrCodeData.qr_code_url.trim() !== '') {
+        console.log("Using existing QR code URL from database:", qrCodeData.qr_code_url);
+        qrCodeUrl = qrCodeData.qr_code_url; // Use existing URL
+      } else {
+        console.log("QR code URL missing or invalid in DB. Generating new URL for ID:", qrCodeId);
         try {
-          // Use a public QR code generation service instead of generating it locally
-          // This is more reliable in a serverless environment
           const generatedQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrCodeId)}`;
-          
-          // No need to upload to storage, just use the URL directly
+          console.log("Generated QR code URL:", generatedQrUrl);
+          qrCodeUrl = generatedQrUrl; // Use the newly generated URL
 
-          // Update database with URL directly
           const { error: updateError } = await supabaseAdmin
             .from('participant_qr_codes')
             .update({ qr_code_url: generatedQrUrl })
             .eq('participant_id', participantId)
             .eq('registration_id', registrationId);
 
-          qrCodeUrl = generatedQrUrl;
-
           if (updateError) {
-            throw new Error(`Failed to update QR code URL: ${updateError.message}`);
+            console.error(`Failed to update QR code URL in database: ${updateError.message}`);
+          } else {
+            console.log("Updated QR code URL in database:", generatedQrUrl);
           }
         } catch (qrError) {
-          console.error("QR code generation error:", qrError);
+          const errorMessage = qrError instanceof Error ? qrError.message : String(qrError);
+          console.error("QR code generation/update error:", errorMessage);
+          // qrCodeUrl remains empty, will trigger fallback message later
         }
-      } else {
-        qrCodeUrl = qrCodeData.qr_code_url;
       }
+    } else {
+      console.warn(`QR Code ID not found for participant ${participantId} / registration ${registrationId}. Cannot generate/display QR code.`);
+      // qrCodeId remains "N/A", qrCodeUrl remains empty
     }
 
     let paymentAmount = 0;
     let paymentNotes = 'N/A';
+
     const { data: paymentData } = await supabaseAdmin
       .from('payments')
       .select('amount, notes, payment_method')
@@ -152,62 +142,22 @@ serve(async (req) => {
     const subject = `[Ulang] Konfirmasi Registrasi MVCU 2025 - ${registrationNumber}`;
 
     let qrCodeSection = '';
-    if (qrCodeId !== "N/A") {
-      // Log QR code URL for debugging
-      console.log("QR code URL from database:", qrCodeUrl);
-      
-      // If we have a QR code URL, use it
-      if (qrCodeUrl && qrCodeUrl.trim() !== '') {
-        // Ensure the URL is absolute
-        const absoluteQrUrl = qrCodeUrl.startsWith('http') ? qrCodeUrl : `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrCodeId)}`;
-        
-        console.log("Using QR code URL in email:", absoluteQrUrl);
-        
-        qrCodeSection = `
+    if (qrCodeUrl && qrCodeUrl.trim() !== '') {
+      qrCodeSection = `
           <h3>Informasi Check-in di Venue:</h3>
           <p>Untuk melakukan registrasi ulang di venue acara, harap tunjukkan QR Code berikut kepada petugas:</p>
           <div style="text-align: center; margin: 20px 0;">
-            <img src="${absoluteQrUrl}" alt="QR Code" style="width: 200px; height: 200px; border: 1px solid #ddd;"><br>
+            <img src="${qrCodeUrl}" alt="QR Code" style="width: 200px; height: 200px; border: 1px solid #ddd;" /><br>
             <strong style="font-size: 1.2em;">${qrCodeId}</strong>
           </div>
           <p>Simpan email ini atau screenshot QR Code Anda.</p>
         `;
-      } else {
-        // Generate a QR code URL on the fly if we don't have one
-        const generatedQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrCodeId)}`;
-        console.log("Generated QR code URL for email:", generatedQrUrl);
-        
-        qrCodeSection = `
-          <h3>Informasi Check-in di Venue:</h3>
-          <p>Untuk melakukan registrasi ulang di venue acara, harap tunjukkan QR Code berikut kepada petugas:</p>
-          <div style="text-align: center; margin: 20px 0;">
-            <img src="${generatedQrUrl}" alt="QR Code" style="width: 200px; height: 200px; border: 1px solid #ddd;"><br>
-            <strong style="font-size: 1.2em;">${qrCodeId}</strong>
-          </div>
-          <p>Simpan email ini atau screenshot QR Code Anda.</p>
-        `;
-        
-        // Update the database with this URL for future use
-        try {
-          const { error: updateError } = await supabaseAdmin
-            .from('participant_qr_codes')
-            .update({ qr_code_url: generatedQrUrl })
-            .eq('participant_id', participantId)
-            .eq('registration_id', registrationId);
-            
-          if (updateError) {
-            console.error(`Failed to update QR code URL in database: ${updateError.message}`);
-          } else {
-            console.log("Updated QR code URL in database:", generatedQrUrl);
-          }
-        } catch (error) {
-          console.error("Error updating QR code URL:", error);
-        }
-      }
     } else {
       qrCodeSection = `
         <h3>Informasi Check-in di Venue:</h3>
-        <p>QR Code Anda akan diberikan saat registrasi di venue acara.</p>
+        <p>Terjadi masalah saat memuat QR Code Anda. Silakan coba lagi nanti atau hubungi panitia. Anda dapat menunjukkan email ini sebagai bukti pembayaran.</p>
+        <p>Nomor Registrasi: ${registrationNumber}</p>
+        <p>Nama: ${recipientName}</p>
       `;
     }
 
@@ -241,36 +191,40 @@ serve(async (req) => {
       html: emailBody
     };
 
-    const resendResponse = await fetch(RESEND_API_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${RESEND_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(resendPayload)
-    });
+    try {
+      const resendResponse = await fetch(RESEND_API_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${RESEND_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(resendPayload)
+      });
 
-    if (!resendResponse.ok) {
-      const errorBody = await resendResponse.text();
-      throw new Error(`Failed to resend email via Resend: ${resendResponse.status} ${resendResponse.statusText} - ${errorBody}`);
+      if (!resendResponse.ok) {
+        const errorBody = await resendResponse.text();
+        throw new Error(`Failed to resend email via Resend: ${resendResponse.status} ${resendResponse.statusText} - ${errorBody}`);
+      }
+
+      const responseData = await resendResponse.json();
+      console.log('Email resent successfully via Resend:', responseData);
+
+      return new Response(JSON.stringify({
+        message: 'Verification email resent successfully',
+        resend_id: responseData.id
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200
+      });
+    } catch (resendError) {
+      const errorMessage = resendError instanceof Error ? resendError.message : String(resendError);
+      console.error("Resend API error:", errorMessage);
+      return errorResponse(`Failed to send email: ${errorMessage}`, 500);
     }
 
-    const responseData = await resendResponse.json();
-    console.log('Email resent successfully via Resend:', responseData);
-
-    return new Response(JSON.stringify({
-      message: 'Verification email resent successfully',
-      resend_id: responseData.id
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200
-    });
   } catch (error) {
-    return new Response(JSON.stringify({
-      error: `Unexpected error: ${error.message}`
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500
-    });
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error("Unexpected function error:", errorMessage);
+    return errorResponse(`Unexpected error: ${errorMessage}`, 500);
   }
 });
