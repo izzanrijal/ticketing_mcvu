@@ -293,6 +293,9 @@ export async function POST(request: Request) {
     const registrationId = registration.id
     console.log("Registration created successfully with ID:", registrationId)
 
+    // Initialize an array to store participant IDs
+    const createdParticipantIds: string[] = []
+
     // --- Step 2: Create Participant Records and link to Registration --- 
     // Validasi apakah participants array ada dan valid
     if (!registrationData.participants || !Array.isArray(registrationData.participants) || registrationData.participants.length === 0) {
@@ -311,9 +314,6 @@ export async function POST(request: Request) {
       console.log("Created default participant from contact person:", registrationData.participants[0])
     }
     
-    // Array to store created participant IDs (still useful for tracking/logging)
-    const createdParticipantIds: string[] = []
-
     // Process each participant and insert into participants table
     for (const participant of registrationData.participants) {
       try {
@@ -374,7 +374,7 @@ export async function POST(request: Request) {
           console.log("Participant created successfully:", newParticipant)
           
           // Add to our array of participant IDs
-          createdParticipantIds.push(newParticipant.id)
+          createdParticipantIds.push(newParticipant.id);
           
           // --- Create QR Code and Workshop Registrations within this loop --- 
           
@@ -531,31 +531,22 @@ export async function POST(request: Request) {
       }
     }
     
-    // --- Step 3: Insert Contact Person --- 
-    // Insert contact_person if available
-    if (registrationData.contact_person && registrationData.contact_person.name && registrationData.contact_person.email && registrationData.contact_person.phone) {
-      try {
-        const contactPersonData = {
-          registration_id: registrationId,
-          name: registrationData.contact_person.name,
-          email: registrationData.contact_person.email,
-          phone: registrationData.contact_person.phone
-        }
-        const { error: contactPersonError } = await supabase
-          .from("contact_persons")
-          .insert(contactPersonData)
-        if (contactPersonError) {
-          console.error("Error inserting contact_person:", contactPersonError)
-        } else {
-          console.log("Contact person inserted successfully")
-        }
-      } catch (contactPersonError) {
-        console.error("Error inserting contact_person:", contactPersonError)
-      }
+    // --- Step 2.5: Update Registration with Participant IDs ---
+    console.log(`Updating registration ${registrationId} with participant IDs:`, createdParticipantIds);
+    const { error: updateRegError } = await supabase
+      .from('registrations')
+      .update({ participant_ids: createdParticipantIds })
+      .eq('id', registrationId);
+
+    if (updateRegError) {
+      // Log the error but don't necessarily stop the process, 
+      // as registration & participants are already created.
+      // Critical monitoring should catch this for investigation.
+      console.error(`Failed to update registration ${registrationId} with participant IDs:`, updateRegError);
     }
 
-    // --- Step 4: Create Payment Record --- 
-    // Create payment record with the unique amount and ONLY use registration_id
+    // --- Step 3: Create Payment Record --- 
+    // Prepare payment data
     const paymentData = {
       status: "pending",
       amount: uniqueFinalAmount,
@@ -621,7 +612,7 @@ export async function POST(request: Request) {
       await schedulePaymentCheck(registrationId)
     }
 
-    // --- Step 5: Send Initial Invoice --- 
+    // --- Step 4: Send Initial Invoice --- 
     // Prepare data for invoice generation
     const invoiceParams = {
       registrationId: registrationId,

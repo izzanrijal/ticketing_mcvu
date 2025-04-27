@@ -178,8 +178,21 @@ serve(async (req: Request) => {
     };
 
     const pdfBuffer = await generatePaidInvoicePdfInternal(pdfParams); 
-
+ 
     const emailSubject = `Konfirmasi Pembayaran & Tiket MVCU 2025 - ${registrationData.registration_number}`;
+    
+    // --- Generate Correct QR Code Data URL ---
+    const qrDataPayload = JSON.stringify({
+      id: participantData.id,
+      name: participantData.full_name,
+      registration_id: registrationData.id,
+      registration_number: registrationData.registration_number,
+      participant_type: participantData.participant_type
+    });
+    console.log(`Generating QR code image for payload: ${qrDataPayload}`);
+    const qrCodeDataUrl = await QRCode.toDataURL(qrDataPayload, { errorCorrectionLevel: 'H', margin: 2 });
+    // ----------------------------------------
+
     const emailHtml = `
         <p>Yth. <strong>${participantData.full_name}</strong>,</p>
         <p>Terima kasih! Pembayaran Anda untuk registrasi The 1st Makassar Vascular Conference Update (MVCU) 2025 (${registrationData.registration_number}) telah kami terima.</p>
@@ -201,6 +214,13 @@ serve(async (req: Request) => {
                 filename: `Invoice_Lunas_MVCU2025_${registrationData.registration_number}_${participantData.full_name.replace(/\s+/g, '_')}.pdf`,
                 content: pdfBuffer, 
             },
+            // --- Add QR Code Ticket as Separate Attachment ---
+            {
+                filename: `QRCode_Ticket_MVCU2025_${registrationData.registration_number}_${participantData.full_name.replace(/\s+/g, '_')}.png`,
+                content: qrCodeDataUrl.split('base64,')[1], // Extract base64 content
+                encoding: 'base64',
+            },
+            // -------------------------------------------
         ],
     });
 
@@ -380,47 +400,6 @@ async function generatePaidInvoicePdfInternal(params: GeneratePdfParams): Promis
     doc.font('Helvetica-Bold').fontSize(11).text(`Rp ${formatCurrency(uniqueAmount)}`, summaryValueX, summaryCurrentY, { width: 90, align: 'right' });
     summaryCurrentY += lineSpacingSummary + 10;
     yPosition = summaryCurrentY;
-
-    try {
-        const qrCodeDataUrl = await QRCode.toDataURL(qrCodeData, { errorCorrectionLevel: 'H', margin: 2 });
-        doc.addPage(); 
-        yPosition = leftMargin;
-
-        doc.font('Helvetica-Bold').fontSize(headerFontSize).text('Tiket Digital / QR Code Check-in', leftMargin, yPosition);
-        doc.moveDown(1);
-        yPosition = doc.y;
-
-        doc.image(qrCodeDataUrl, {
-            fit: [150, 150], 
-            align: 'center',
-            valign: 'center'
-        });
-        yPosition = doc.y + 160; 
-
-        doc.font('Helvetica').fontSize(defaultFontSize).text(`Kode: ${qrCodeData}`, { align: 'center' });
-        yPosition = doc.y + sectionSpacing;
-
-        doc.font('Helvetica').fontSize(defaultFontSize).text(
-            `Peserta: ${p.full_name}`, 
-            leftMargin, 
-            yPosition, 
-            { align: 'left' } 
-        );
-        yPosition = doc.y + lineSpacing;
-        
-        doc.font('Helvetica').fontSize(defaultFontSize).text(
-            'Harap tunjukkan QR Code ini kepada petugas saat melakukan registrasi ulang (check-in) di lokasi acara. '
-            + 'Simpan email ini atau screenshot halaman ini.', 
-            leftMargin, 
-            yPosition, 
-            { align: 'left', width: width - leftMargin - rightMargin } 
-        );
-
-    } catch (err) {
-        console.error('Failed to generate QR code:', err);
-        doc.addPage(); 
-        doc.text('Gagal membuat QR Code.', leftMargin, leftMargin);
-    }
 
     doc.end();
 

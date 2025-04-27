@@ -620,6 +620,21 @@ export async function generateInvoicePdf(
         return currentY - spacing;
     };
 
+    // --- Helper: Truncate text if too wide ---
+    const truncateText = (text: string, maxWidth: number, fontInstance: PDFFont, size: number): string => {
+        let textWidth = fontInstance.widthOfTextAtSize(text, size);
+        if (textWidth <= maxWidth) {
+            return text;
+        }
+        // Simple truncation with ellipsis
+        let truncated = text;
+        while (textWidth > maxWidth && truncated.length > 0) {
+            truncated = truncated.slice(0, -1);
+            textWidth = fontInstance.widthOfTextAtSize(truncated + '...', size);
+        }
+        return truncated + '...';
+    };
+
     // --- Header Section ---
     // Logo Placeholder (Top Left)
     const logoHeight = 40;
@@ -671,9 +686,9 @@ export async function generateInvoicePdf(
     const itemX = 155; // Start Item column further right
     const categoryX = 350; // Start Category column further right
     const priceX = 455; // Start Price column
-    const nameWidth = 100; // Width for participant name column
-    const itemWidth = 190; // Width for item column
-    const categoryWidth = 100; // Width for category column
+    const nameMaxWidth = itemX - nameX - 5; // Approx 100
+    const itemMaxWidth = categoryX - itemX - 5; // Approx 190
+    const categoryMaxWidth = (width - rightMargin) - categoryX - 5; // Approx 190
     const priceWidth = 90; // Width for price column (right aligned)
     
     page.drawRectangle({ // Header Background
@@ -684,10 +699,9 @@ export async function generateInvoicePdf(
         color: lightGrayColor,
         opacity: 0.5,
     });
-    drawText('Nama Peserta', nameX, yPosition, tableHeaderFontSize, true);
     drawText('Item', itemX, yPosition, tableHeaderFontSize, true);
     drawText('Kategori Peserta', categoryX, yPosition, tableHeaderFontSize, true);
-    drawText('Harga (IDR)', priceX, yPosition, tableHeaderFontSize, true, grayColor, 'right');
+    drawText('Harga (IDR)', width - rightMargin, yPosition, tableHeaderFontSize, true, grayColor, 'right');
     yPosition = moveYDown(yPosition, tableHeaderFontSize + 8 + 5); // Space after header
 
     let participantNameForCurrentRow = ''; // Name for the current participant being processed
@@ -697,10 +711,14 @@ export async function generateInvoicePdf(
         const rowStartY = yPosition;
         
         // Use helper to draw text, adjusting y slightly for vertical center
-        drawText(participantNameForCurrentRow, nameX, rowStartY - tableCellFontSize * 0.7, tableCellFontSize, false);
-        drawText(item, itemX, rowStartY - tableCellFontSize * 0.7, tableCellFontSize, false);
-        drawText(category, categoryX, rowStartY - tableCellFontSize * 0.7, tableCellFontSize, false);
-        drawText(priceString, priceX, rowStartY - tableCellFontSize * 0.7, tableCellFontSize, false, grayColor, 'right');
+        const truncatedName = truncateText(participantNameForCurrentRow, nameMaxWidth, font, tableCellFontSize);
+        const truncatedItem = truncateText(item, itemMaxWidth, font, tableCellFontSize);
+        const truncatedCategory = truncateText(category, categoryMaxWidth, font, tableCellFontSize);
+
+        drawText(truncatedName, nameX, rowStartY - tableCellFontSize * 0.7, tableCellFontSize, false);
+        drawText(truncatedItem, itemX, rowStartY - tableCellFontSize * 0.7, tableCellFontSize, false);
+        drawText(truncatedCategory, categoryX, rowStartY - tableCellFontSize * 0.7, tableCellFontSize, false);
+        drawText(priceString, width - rightMargin, rowStartY - tableCellFontSize * 0.7, tableCellFontSize, false, grayColor, 'right');
 
         // Draw horizontal line after row content
         const lineY = moveYDown(rowStartY, lineSpacing) + 5; // Position line below text
@@ -722,7 +740,7 @@ export async function generateInvoicePdf(
 
         // Add Symposium Row if attending
         if (p.attendSymposium && ticketData) {
-            const symposiumTitle = ticketData.name ?? 'Symposium'; // Use ticket title or placeholder
+            const symposiumTitle = ticketData?.name ?? 'Symposium';
             let symposiumPrice = 0;
 
             // --- Refactored Price Lookup --- 
@@ -774,7 +792,7 @@ export async function generateInvoicePdf(
     // --- Totals Section --- (Right Aligned)
     if (paymentType !== 'sponsor') {
         const totalLabelX = 300;
-        const totalValueX = 455;
+        const totalValueX = width - rightMargin; // Align values to actual right margin
         let totalY = yPosition;
 
         totalY = moveYDown(totalY, lineSpacing * 0.5); // Space before totals
@@ -787,7 +805,8 @@ export async function generateInvoicePdf(
 
         totalY = moveYDown(drawText('Kode Unik Pengurang:', totalLabelX, totalY, defaultFontSize, false), lineSpacing);
         const actualUniqueDeduction = (originalAmount - discountAmount) - uniqueAmount; // Calculate actual deduction
-        drawText(`- Rp ${formatCurrency(actualUniqueDeduction)}`, totalValueX, totalY + lineSpacing, defaultFontSize, false, grayColor, 'right');
+        const displayDeduction = Math.abs(actualUniqueDeduction) < 0.01 ? 0 : actualUniqueDeduction;
+        drawText(`- Rp ${formatCurrency(displayDeduction)}`, totalValueX, totalY + lineSpacing, defaultFontSize, false, grayColor, 'right');
 
         totalY = moveYDown(totalY, lineSpacing * 0.5); // Space before line
         page.drawLine({ start: { x: totalLabelX - 10, y: totalY }, end: { x: width - rightMargin, y: totalY }, thickness: 1, color: grayColor });
@@ -918,7 +937,7 @@ export async function generatePaidInvoicePdf(
     doc.text('Nama Peserta', nameX, tableTop, { width: nameWidth });
     doc.text('Item', itemX, tableTop, { width: itemWidth });
     doc.text('Kategori', categoryX, tableTop, { width: categoryWidth });
-    doc.text('Harga (IDR)', priceX, tableTop, { width: priceWidth, align: 'right' });
+    doc.text('Harga (IDR)', width - rightMargin, tableTop, { width: priceWidth, align: 'right' });
     doc.moveTo(nameX, doc.y).lineTo(priceX + priceWidth, doc.y).stroke();
     doc.moveDown(0.5);
     doc.font('Helvetica');
@@ -929,18 +948,37 @@ export async function generatePaidInvoicePdf(
         const participantTypeDisplay = participantTypeMap[p.participant_type] || p.participant_type;
         let firstItem = true;
 
-        // Add Symposium if attending
+        // Add Symposium Row if attending
         if (p.attendSymposium && ticketData) {
+            const symposiumTitle = ticketData.name ?? 'Symposium'; // Use ticket title or placeholder
             let symposiumPrice = 0;
+
+            // --- Refactored Price Lookup --- 
             switch (p.participant_type) {
-                case 'specialist_doctor': symposiumPrice = ticketData.price_specialist_doctor ?? 0; break;
-                case 'general_doctor': symposiumPrice = ticketData.price_general_doctor ?? 0; break;
-                case 'nurse': symposiumPrice = ticketData.price_nurse ?? 0; break;
-                case 'student': symposiumPrice = ticketData.price_student ?? 0; break;
-                case 'other': symposiumPrice = ticketData.price_other ?? 0; break;
-                default: symposiumPrice = ticketData.price_other ?? 0; // Default or handle error
+                case 'specialist_doctor':
+                    symposiumPrice = ticketData.price_specialist_doctor ?? 0;
+                    break;
+                case 'general_doctor':
+                    symposiumPrice = ticketData.price_general_doctor ?? 0;
+                    break;
+                case 'nurse':
+                    symposiumPrice = ticketData.price_nurse ?? 0;
+                    break;
+                case 'student':
+                    symposiumPrice = ticketData.price_student ?? 0;
+                    break;
+                case 'resident': // Assuming resident uses general_doctor price if not specified
+                    symposiumPrice = ticketData.price_general_doctor ?? 0; 
+                    break;
+                case 'other':
+                    symposiumPrice = ticketData.price_other ?? 0;
+                    break;
+                default:
+                    console.warn(`Unknown participant type for price lookup: ${p.participant_type}`);
+                    symposiumPrice = 0; // Default to 0 if type not found
             }
-            const symposiumTitle = ticketData?.name ?? 'Symposium';
+            // --- End Refactor ---
+
             const nameText = firstItem ? p.full_name || 'N/A' : '';
             const symposiumName = symposiumTitle;
             const categoryText = participantTypeDisplay;
@@ -954,17 +992,16 @@ export async function generatePaidInvoicePdf(
             doc.text(nameText, nameX, currentY, { width: nameWidth, lineBreak: true });
             doc.text(symposiumName, itemX, currentY, { width: itemWidth, lineBreak: true });
             doc.text(categoryText, categoryX, currentY, { width: categoryWidth, lineBreak: true });
-            doc.text(priceText, priceX, currentY, { width: priceWidth, align: 'right' });
+            doc.text(priceText, width - rightMargin, currentY, { width: priceWidth, align: 'right' });
 
             currentY += currentActualRowHeight + 5;
             firstItem = false;
         }
 
-        // Add Workshops
         if (p.workshop_registrations && p.workshop_registrations.length > 0) {
             p.workshop_registrations.forEach((reg: { workshop_id: string }) => {
                 const workshop = workshopDetailsMap.get(reg.workshop_id);
-                const wsName = workshop?.name ?? 'Workshop Tidak Ditemukan';
+                const wsName = workshop?.name || `Workshop ${reg.workshop_id}`; // Use workshop.name
                 const wsPrice = workshop?.price ?? 0;
 
                 const nameText = firstItem ? p.full_name || 'N/A' : '';
@@ -980,7 +1017,7 @@ export async function generatePaidInvoicePdf(
                 doc.text(nameText, nameX, currentY, { width: nameWidth, lineBreak: true });
                 doc.text(workshopName, itemX, currentY, { width: itemWidth, lineBreak: true });
                 doc.text(categoryText, categoryX, currentY, { width: categoryWidth, lineBreak: true });
-                doc.text(priceText, priceX, currentY, { width: priceWidth, align: 'right' });
+                doc.text(priceText, width - rightMargin, currentY, { width: priceWidth, align: 'right' });
 
                 currentY += currentActualRowHeight + 5;
                 firstItem = false;
@@ -994,7 +1031,7 @@ export async function generatePaidInvoicePdf(
 
     // --- Summary Section ---
     const summaryLabelX = 300;
-    const summaryValueX = 455;
+    const summaryValueX = width - rightMargin;
     let summaryCurrentY = yPosition;
     const lineSpacingSummary = 15;
 

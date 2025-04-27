@@ -452,7 +452,7 @@ export function AdminParticipants() {
                       : 'destructive');
 
                 return (
-                  <TableRow key={p.registration_id || p.participant_id}>
+                  <TableRow key={p.participant_id}> 
                     <TableCell>{p.registration_number ?? 'N/A'}</TableCell>
                     <TableCell>{p.qr_code_id ?? 'N/A'}</TableCell>
                     <TableCell>{p.full_name ?? 'N/A'}</TableCell>
