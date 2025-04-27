@@ -96,7 +96,7 @@ export async function POST(request: Request) {
       .single()
 
     // Get all workshop details
-    const allWorkshopIds = registrationData.participants.flatMap((p) => p.workshops || [])
+    const allWorkshopIds = registrationData.participants.flatMap((p: any) => p.workshops || [])
     let workshopDetails = []
     if (allWorkshopIds.length > 0) {
       const { data: workshops } = await supabase.from("workshops").select("*").in("id", allWorkshopIds)
@@ -115,7 +115,7 @@ export async function POST(request: Request) {
 
       // Add workshop prices
       if (participant.workshops && participant.workshops.length > 0) {
-        participant.workshops.forEach((workshopId) => {
+        participant.workshops.forEach((workshopId: any) => {
           const workshop = workshopDetails.find((w) => w.id === workshopId)
           if (workshop) {
             recalculatedTotal += workshop.price
@@ -250,22 +250,22 @@ export async function POST(request: Request) {
 
     // Cek dan tambahkan kolom total_amount jika ada
     if (registrationColumns && Object.keys(registrationColumns).includes("total_amount")) {
-      registrationData1["total_amount"] = verifiedTotalAmount
+      (registrationData1 as any)["total_amount"] = verifiedTotalAmount
     }
 
     // Cek dan tambahkan kolom discount_amount jika ada
     if (registrationColumns && Object.keys(registrationColumns).includes("discount_amount")) {
-      registrationData1["discount_amount"] = discountAmount
+      (registrationData1 as any)["discount_amount"] = discountAmount
     }
 
     // Cek dan tambahkan kolom final_amount jika ada
     if (registrationColumns && Object.keys(registrationColumns).includes("final_amount")) {
-      registrationData1["final_amount"] = uniqueFinalAmount
+      (registrationData1 as any)["final_amount"] = uniqueFinalAmount
     }
 
     // Cek dan tambahkan kolom notes jika ada
     if (registrationColumns && Object.keys(registrationColumns).includes("notes")) {
-      registrationData1["notes"] = appliedPromoCode
+      (registrationData1 as any)["notes"] = appliedPromoCode
         ? `Promo: ${appliedPromoCode}, Unique Deduction: ${uniqueDeduction}`
         : `Unique Deduction: ${uniqueDeduction}`
     }
@@ -450,7 +450,7 @@ export async function POST(request: Request) {
     const registrationDataWithParticipants: any = {
       ...registrationData1,
       participant_ids: participantIds,
-      ticket_id: registrationData1.ticket_id // Add ticket_id here
+      ticket_id: registrationData.ticket_id // Corrected: Use original registrationData for ticket_id
     }
     
     console.log("Creating registration with participant IDs:", participantIds)
@@ -641,16 +641,14 @@ export async function POST(request: Request) {
     // Send registration invoice email asynchronously
     if (registrationData.contact_person && registrationData.contact_person.email) {
       // Fire-and-forget: Don't await this promise
-      const registrationCreationTime = new Date(); // Use current time as proxy for creation time
       sendRegistrationInvoice(
         registrationId, 
-        registrationNumber, // Pass the human-readable number
-        registrationCreationTime, // Pass the creation timestamp
-        registrationData.contact_person, 
+        registrationNumber, 
         uniqueFinalAmount, 
-        finalAmount, // original amount before unique deduction
-        uniqueDeduction,
-        registrationData // Pass necessary details for the invoice
+        finalAmount, 
+        uniqueDeduction, 
+        registrationData.payment_type,
+        registrationData.participants
       ).catch(emailError => {
         // Log error if sending email fails, but don't block response
         console.error(`Error sending registration invoice for ${registrationId}:`, emailError);
