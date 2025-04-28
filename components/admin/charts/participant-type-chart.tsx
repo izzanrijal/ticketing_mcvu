@@ -69,6 +69,23 @@ export function ParticipantTypeChart() {
     )
   }
 
+  // Custom Tooltip
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const total = data.reduce((sum, item) => sum + item.value, 0);
+      const value = payload[0].value;
+      const percent = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+      return (
+        <div className="bg-white rounded shadow px-3 py-2 border text-xs">
+          <div><b>{payload[0].name}</b></div>
+          <div>Jumlah: {value}</div>
+          <div>Persentase: {percent}%</div>
+        </div>
+      );
+    }
+    return null;
+  };
+
   return (
     <ResponsiveContainer width="100%" height={200}>
       <PieChart>
@@ -77,8 +94,8 @@ export function ParticipantTypeChart() {
             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
           ))}
         </Pie>
-        <Tooltip />
-        <Legend />
+        <Tooltip content={<CustomTooltip />} />
+        {/* <Legend layout="vertical" verticalAlign="middle" align="right" /> */}
       </PieChart>
     </ResponsiveContainer>
   )
