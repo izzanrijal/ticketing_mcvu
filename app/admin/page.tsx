@@ -32,7 +32,7 @@ export default async function AdminPage() {
   }
 
   return (
-    <AdminDashboardLayout user={user}> // Pass user object
+    <AdminDashboardLayout user={user}>
       <EnhancedOverview />
     </AdminDashboardLayout>
   )
