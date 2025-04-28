@@ -126,41 +126,72 @@ export function RegistrationForm() {
       if (participantError) throw participantError
 
       // Step 2: Create registration
-      const registrationNumber = `MCVU-${Date.now().toString().slice(-8)}`
-
+      // Initial insert without sponsor letter URL
       const { data: registration, error: registrationError } = await supabase
         .from("registrations")
         .insert({
-          registration_number: registrationNumber,
-          total_amount: totalAmount, // Calculate this based on selections
-          discount_amount: 0, // Calculate this if promo code is used
-          final_amount: totalAmount, // Calculate this based on total - discount
-          status: "pending",
+          participant_id: participant.id,
+          ticket_id: data.ticket_id,
+          status: "pending", // Default status
+          payment_type: data.payment_type,
+          // sponsor_letter_url will be updated later if needed
         })
         .select()
         .single()
 
       if (registrationError) throw registrationError
 
-      // Step 3: Create registration item
-      const { error: registrationItemError } = await supabase.from("registration_items").insert({
-        registration_id: registration.id,
-        participant_id: participant.id,
-        ticket_id: data.ticket_id,
-        amount: totalAmount,
-      })
+      // Step 3: Upload sponsor letter if applicable
+      let sponsorLetterUrl: string | null = null
+      if (data.payment_type === "sponsor" && data.sponsor_letter) {
+        const file = data.sponsor_letter as File
+        const fileExt = file.name.split('.').pop()
+        const filePath = `sponsor_letters/${registration.id}.${fileExt}` // Use registration UUID for unique filename
 
-      if (registrationItemError) throw registrationItemError
+        const { error: uploadError } = await supabase.storage
+          .from("sponsor-letters") // Ensure this bucket exists and has appropriate policies
+          .upload(filePath, file)
 
-      // Step 4: Add workshop selections if any
+        if (uploadError) {
+          // Handle upload error (e.g., show toast, maybe rollback?)
+          console.error("Sponsor letter upload failed:", uploadError)
+          toast({
+            title: "Upload Gagal",
+            description: "Gagal mengunggah surat jaminan sponsor.",
+            variant: "destructive",
+          })
+          // Optionally, consider deleting the created participant/registration records for consistency
+          // await supabase.from('registrations').delete().match({ id: registration.id })
+          // await supabase.from('participants').delete().match({ id: participant.id })
+          throw uploadError // Stop further processing
+        }
+
+        // Get public URL
+        const { data: urlData } = supabase.storage
+          .from("sponsor-letters")
+          .getPublicUrl(filePath)
+
+        sponsorLetterUrl = urlData?.publicUrl || null
+
+        // Update registration record with the URL
+        const { error: updateError } = await supabase
+          .from("registrations")
+          .update({ sponsor_letter_url: sponsorLetterUrl })
+          .match({ id: registration.id })
+
+        if (updateError) {
+          console.error("Failed to update registration with sponsor letter URL:", updateError)
+          // Handle update error if needed
+        }
+      }
+
+      // Step 4: Create registration workshops
       if (data.workshops && data.workshops.length > 0) {
-        const workshopItems = data.workshops.map((workshopId) => ({
-          participant_id: participant.id,
-          workshop_id: workshopId,
+        const workshopData = data.workshops.map((wsId) => ({
           registration_id: registration.id,
+          workshop_id: wsId,
         }))
-
-        const { error: workshopError } = await supabase.from("participant_workshops").insert(workshopItems)
+        const { error: workshopError } = await supabase.from("registration_workshops").insert(workshopData)
 
         if (workshopError) throw workshopError
       }
@@ -174,36 +205,6 @@ export function RegistrationForm() {
       })
 
       if (paymentError) throw paymentError
-
-      // If sponsor payment, handle sponsor letter upload
-      if (data.payment_type === "sponsor" && data.sponsor_letter) {
-        const file = data.sponsor_letter as File;
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${registration.id}-${Date.now()}.${fileExt}`;
-        
-        const { data: uploadData, error: uploadError } = await supabase
-          .storage
-          .from('sponsor_letters')
-          .upload(fileName, file);
-          
-        if (uploadError) {
-          console.error("File upload error:", uploadError);
-          throw uploadError;
-        }
-        
-        // Update registration with sponsor letter URL
-        const { error: updateError } = await supabase
-          .from('registrations')
-          .update({ 
-            sponsor_letter_url: uploadData.path 
-          })
-          .eq('id', registration.id);
-          
-        if (updateError) {
-          console.error("Registration update error:", updateError);
-          throw updateError;
-        }
-      }
 
       // Success! Redirect to payment page
       router.push(`/payment/${registration.id}`)

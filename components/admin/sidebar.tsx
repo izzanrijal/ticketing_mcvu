@@ -11,6 +11,7 @@ import {
   FileText,
   Percent,
   Search,
+  FileUp,
   PenToolIcon as Tool,
   AlertTriangle,
 } from "lucide-react"
@@ -50,6 +51,12 @@ export function AdminSidebar({ activeTab, setActiveTab, isMobile = false }: Admi
       label: "Pembayaran",
       icon: <CreditCard className="h-5 w-5" />,
       href: "/admin/payments",
+    },
+    {
+      id: "sponsor-letters",
+      label: "Sponsor Letters",
+      icon: <FileUp className="h-5 w-5" />,
+      href: "/admin/sponsor-letters",
     },
     {
       id: "promotions",

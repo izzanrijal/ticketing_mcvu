@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { CreditCard, Building2 } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 import { Button } from "@/components/ui/button"
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
@@ -165,12 +166,18 @@ export function CategorySelection({ onNext }: CategorySelectionProps) {
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       {/* Self Payment Option */}
                       <div
-                        className={`cursor-pointer transition-all hover:opacity-90 ${
-                          field.value === "self" ? "ring-2 ring-primary" : ""
-                        }`}
+                        className={cn(
+                          "cursor-pointer rounded-xl transition-all hover:opacity-90",
+                          field.value === "self" && "ring-2 ring-primary"
+                        )}
                         onClick={() => field.onChange("self")}
                       >
-                        <Card className={`h-full border ${field.value === "self" ? "border-primary" : ""}`}>
+                        <Card
+                          className={cn(
+                            "h-full border",
+                            field.value === "self" && "bg-primary/5"
+                          )}
+                        >
                           <CardHeader className="pb-2">
                             <CardTitle className="flex items-center gap-2">
                               <CreditCard className="h-5 w-5" />
@@ -185,12 +192,18 @@ export function CategorySelection({ onNext }: CategorySelectionProps) {
 
                       {/* Sponsor Payment Option */}
                       <div
-                        className={`cursor-pointer transition-all hover:opacity-90 ${
-                          field.value === "sponsor" ? "ring-2 ring-primary" : ""
-                        }`}
+                        className={cn(
+                          "cursor-pointer rounded-xl transition-all hover:opacity-90",
+                          field.value === "sponsor" && "ring-2 ring-primary"
+                        )}
                         onClick={() => field.onChange("sponsor")}
                       >
-                        <Card className={`h-full border ${field.value === "sponsor" ? "border-primary" : ""}`}>
+                        <Card
+                          className={cn(
+                            "h-full border",
+                            field.value === "sponsor" && "bg-primary/5"
+                          )}
+                        >
                           <CardHeader className="pb-2">
                             <CardTitle className="flex items-center gap-2">
                               <Building2 className="h-5 w-5" />
