@@ -2,7 +2,7 @@
 import React from 'react'; // Add missing React import
 import { useEffect, useState, useCallback } from "react"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
-import { Download, Search } from "lucide-react"
+import { Download, Search, RotateCw as ReloadIcon } from "lucide-react"
 import * as XLSX from 'xlsx';
 
 import { Button } from "@/components/ui/button"
@@ -415,19 +415,19 @@ export function AdminParticipants() {
 
   // Handler function to resend the paid invoice/ticket
   const handleResendPaidInvoice = async (participant: ParticipantData) => {
-    if (!participant.registration_id || !participant.id) {
+    if (!participant.registration_id || !participant.participant_id) {
       toast({ title: "Error", description: "ID Registrasi atau Peserta tidak ditemukan.", variant: "destructive" });
       return;
     }
 
-    console.log(`Attempting to resend paid invoice for participant: ${participant.id} on registration: ${participant.registration_id}`);
-    setIsResending(participant.id); // Set loading state for this specific participant
+    console.log(`Attempting to resend paid invoice for participant: ${participant.participant_id} on registration: ${participant.registration_id}`);
+    setIsResending(participant.participant_id); // Set loading state for this specific participant
 
     try {
       const { error: functionError } = await supabase.functions.invoke('send-paid-invoice', {
         body: { 
           registrationId: participant.registration_id, 
-          participantId: participant.id 
+          participantId: participant.participant_id 
         }
       });
 
@@ -436,7 +436,7 @@ export function AdminParticipants() {
         throw new Error(functionError.message || 'Gagal memanggil fungsi kirim ulang.');
       }
 
-      console.log(`Resend function invoked successfully for participant: ${participant.id}`);
+      console.log(`Resend function invoked successfully for participant: ${participant.participant_id}`);
       toast({ title: "Sukses", description: `Email tiket/invoice untuk ${participant.full_name} sedang dikirim ulang.` });
 
     } catch (error: any) {
@@ -496,7 +496,7 @@ export function AdminParticipants() {
               <TableHead>Email</TableHead>
               <TableHead>Telepon</TableHead>
               <TableHead>Institusi</TableHead>
-              <TableHead>Kategori Peserta</TableHead> {/* New Header */}
+              <TableHead>Kategori Peserta</TableHead>
               <TableHead>Status Registrasi</TableHead>
               <TableHead>Catatan Pembayaran</TableHead>
               <TableHead className="text-right">Aksi</TableHead>
@@ -547,12 +547,12 @@ export function AdminParticipants() {
                               variant="outline"
                               size="sm"
                               onClick={() => {
-                                console.log(`DEBUG: Resend Ticket button clicked for participant: ${p.id}`);
+                                console.log(`DEBUG: Resend Ticket button clicked for participant: ${p.participant_id}`);
                                 handleResendPaidInvoice(p);
                               }}
-                              disabled={isResending === p.id}
+                              disabled={isResending === p.participant_id}
                             >
-                              {isResending === p.id ? <ReloadIcon className="mr-2 h-4 w-4 animate-spin" /> : null}Kirim Ulang Tiket
+                              {isResending === p.participant_id ? <ReloadIcon className="mr-2 h-4 w-4 animate-spin" /> : null}Kirim Ulang Tiket
                             </Button>
                           );
                         } else if (p.registration_status === 'pending' || p.registration_status === 'pending verification') {
@@ -580,8 +580,8 @@ export function AdminParticipants() {
                     </TableCell>
                   </TableRow>
                 )
-              })
-            )}
+              }))
+            }
           </TableBody>
         </Table>
       </div>
