@@ -35,9 +35,15 @@ export function AdminSidebar({ activeTab, setActiveTab, isMobile = false }: Admi
     },
     {
       id: "participants",
-      label: "Peserta",
+      label: "Simposium",
       icon: <Users className="h-5 w-5" />,
       href: "/admin/participants",
+    },
+    {
+      id: "ws-participants",
+      label: "Workshop",
+      icon: <Users className="h-5 w-5" />,
+      href: "/admin/ws-participants",
     },
     {
       id: "payments",
