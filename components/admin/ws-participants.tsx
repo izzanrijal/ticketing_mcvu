@@ -252,6 +252,51 @@ export function AdminWsParticipants() {
       fetchWsParticipants(); // Refresh the list
       setShowManualVerifyModal(false); // Close modal
 
+      // --- BEGIN: Invoke email sending function ---
+      // Run this async without blocking the UI closing
+      (async () => {
+        try {
+            console.log(`Attempting to send verification email for registration: ${selectedParticipant.registration_id} and participant: ${selectedParticipant.participant_id}`);
+            if (!selectedParticipant.registration_id || !selectedParticipant.participant_id) {
+                console.error("Missing registration ID or Participant ID for email sending.");
+                 toast({ 
+                    title: "Peringatan Email", 
+                    description: `Verifikasi workshop berhasil, TAPI GAGAL mengirim email: ID Registrasi atau ID Peserta tidak ditemukan.`, 
+                    variant: "warning", 
+                    duration: 10000
+                });
+                return; // Don't proceed if ID is missing
+            }
+
+            // Ensure you have the correct function name and expected body parameters
+            const { error: emailError } = await supabase.functions.invoke('resend-verification-email', {
+                body: { 
+                    registrationId: selectedParticipant.registration_id, 
+                    participantId: selectedParticipant.participant_id
+                    // Add other parameters if the function needs them
+                }
+            });
+
+            if (emailError) {
+                throw emailError; // Let the catch block handle it
+            }
+            console.log(`Verification email function invoked successfully for registration: ${selectedParticipant.registration_id}`);
+            // Optional: Show a less intrusive success toast for email?
+             toast({ title: "Info Email", description: "Email verifikasi sedang dikirim." });
+
+        } catch (emailError: any) {
+            console.error("Error invoking/sending verification email:", emailError);
+            // Notify admin separately about email failure
+             toast({ 
+                title: "Peringatan Email", 
+                description: `Verifikasi workshop berhasil, TAPI GAGAL mengirim email verifikasi: ${emailError.message || 'Unknown error'}.`, 
+                variant: "destructive",
+                duration: 10000 // Longer duration for warning
+            });
+        }
+      })(); // Immediately invoke the async email function
+      // --- END: Invoke email sending function ---
+
     } catch (err: any) {
       console.error("Verification failed:", err);
       toast({ 
@@ -262,7 +307,7 @@ export function AdminWsParticipants() {
     } finally {
       setIsVerifying(false);
     }
-  }
+  };
 
   // Function to fetch all items purchased under the same registration number
   const fetchRelatedItems = async (participant: WsParticipantData) => {
@@ -276,7 +321,7 @@ export function AdminWsParticipants() {
     try {
       // Fetch all participants and workshops with the same registration number
       const { data, error } = await supabase
-        .from('workshop_registration_summary')
+        .from('workshop_registration_summary') // Ensure this view name is correct
         .select('*')
         .eq('registration_number', participant.registration_number);
 
@@ -287,13 +332,15 @@ export function AdminWsParticipants() {
           description: `Gagal mengambil data terkait: ${error.message}`, 
           variant: "destructive" 
         });
+        setRelatedParticipants([]); // Clear on error
+        setRelatedWorkshops([]);
         return;
       }
 
-      // Set the related participants
+      // Set the related participants (full data for potential future use)
       setRelatedParticipants(data || []);
 
-      // Create a list of all workshops purchased in this registration
+      // Create a simplified list of workshops purchased in this registration for display
       const workshops = (data || []).map(item => ({
         name: item.workshop_name || 'Unknown Workshop',
         participant: item.participant_name || 'Unknown Participant'
@@ -307,6 +354,8 @@ export function AdminWsParticipants() {
         description: `Terjadi kesalahan saat mengambil data terkait: ${err.message || JSON.stringify(err)}`, 
         variant: "destructive" 
       });
+      setRelatedParticipants([]); // Clear on error
+      setRelatedWorkshops([]);
     }
   };
 
