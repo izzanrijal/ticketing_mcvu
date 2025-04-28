@@ -529,28 +529,27 @@ export function AdminParticipants() {
 
                 return (
                   <TableRow key={p.participant_id}>
-                      <TableCell>{p.registration_number ?? 'N/A'}</TableCell>
-                      <TableCell>{p.qr_code_id ?? 'N/A'}</TableCell>
-                      <TableCell>{p.full_name ?? 'N/A'}</TableCell>
-                      <TableCell>{p.nik ?? 'N/A'}</TableCell>
-                      <TableCell>{p.email ?? 'N/A'}</TableCell>
-                      <TableCell>{p.phone ?? 'N/A'}</TableCell>
-                      <TableCell>{p.institution ?? 'N/A'}</TableCell>
-                      <TableCell>{p.participant_type ? (participantTypeMap[p.participant_type] || p.participant_type) : '-'}</TableCell>
-                      <TableCell><Badge variant={badgeVariant === 'success' ? 'default' : badgeVariant}>{p.registration_status ?? 'N/A'}</Badge></TableCell>
-                      <TableCell>{p.payment_note ?? '-'}</TableCell>
-                      <TableCell className="text-right">
+                    <TableCell>{p.registration_number ?? 'N/A'}</TableCell>
+                    <TableCell>{p.qr_code_id ?? 'N/A'}</TableCell>
+                    <TableCell>{p.full_name ?? 'N/A'}</TableCell>
+                    <TableCell>{p.nik ?? 'N/A'}</TableCell>
+                    <TableCell>{p.email ?? 'N/A'}</TableCell>
+                    <TableCell>{p.phone ?? 'N/A'}</TableCell>
+                    <TableCell>{p.institution ?? 'N/A'}</TableCell>
+                    <TableCell>{p.participant_type ? (participantTypeMap[p.participant_type] || p.participant_type) : '-'}</TableCell>
+                    <TableCell><Badge variant={badgeVariant === 'success' ? 'default' : badgeVariant}>{p.registration_status ?? 'N/A'}</Badge></TableCell>
+                    <TableCell>{p.payment_note ?? '-'}</TableCell>
+                    <TableCell className="text-right">
                       {(() => {
-                        // Explicitly check registration_status and render the appropriate button
                         if (p.registration_status === 'paid') {
                           return (
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              onClick={() => { 
-                                console.log(`DEBUG: Resend Ticket button clicked for participant: ${p.id}`); // Keep log
-                                handleResendPaidInvoice(p); 
-                              }} 
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                console.log(`DEBUG: Resend Ticket button clicked for participant: ${p.id}`);
+                                handleResendPaidInvoice(p);
+                              }}
                               disabled={isResending === p.id}
                             >
                               {isResending === p.id ? <ReloadIcon className="mr-2 h-4 w-4 animate-spin" /> : null}Kirim Ulang Tiket
@@ -563,26 +562,23 @@ export function AdminParticipants() {
                             </Button>
                           );
                         } else if (p.registration_status === 'verified') {
-                          // Assuming handleResendEmail and resendingEmail state exist from previous context
-                          // Ensure participant_id and email are not null/undefined before calling
                           const canResendVerification = p.participant_id && p.email;
                           return (
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              onClick={() => canResendVerification && handleResendEmail(p.participant_id!, p.email!)} 
-                              disabled={!canResendVerification || resendingEmail[p.participant_id!] }
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => canResendVerification && handleResendEmail(p.participant_id!, p.email!)}
+                              disabled={!canResendVerification || resendingEmail[p.participant_id!]}
                             >
                               {resendingEmail[p.participant_id!] ? "Mengirim..." : "Kirim Ulang Email"}
                             </Button>
                           );
                         } else {
-                          // Default case if status doesn't match known actions
                           return <span>-</span>;
                         }
                       })()}
-                      </TableCell>
-                    </TableRow>
+                    </TableCell>
+                  </TableRow>
                 )
               })
             )}
