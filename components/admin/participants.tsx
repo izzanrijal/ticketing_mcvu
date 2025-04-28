@@ -82,9 +82,9 @@ export function AdminParticipants() {
 
       // Apply filters if needed
       // Note: Filtering might need adjustment based on joined data structure
-      // if (participantType !== "all") {
-      //   query = query.eq('participant_type', participantType)
-      // }
+      if (participantType !== "all") {
+        query = query.eq('participant_type', participantType)
+      }
 
       if (searchQuery) {
         // Filter on columns available in the view
@@ -112,7 +112,7 @@ export function AdminParticipants() {
     } finally {
       setLoading(false);
     }
-  }, [supabase, searchQuery]); // Add dependencies
+  }, [supabase, searchQuery, participantType]); // Add participantType dependency
 
   // useEffect for initial data fetching
   useEffect(() => {
