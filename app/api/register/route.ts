@@ -561,7 +561,9 @@ export async function POST(request: Request) {
     if (sponsorLetterFile && registrationData.payment_type === "sponsor") {
       try {
         // Upload file to Supabase storage
-        const fileName = `sponsor_letter_${registrationId}_${Date.now()}.pdf`
+        // Create the filename with standardized format: MCVU-64602088-sponsorship-letter.pdf
+        const fileExtension = sponsorLetterFile.name.split('.').pop() || 'pdf';
+        const fileName = `${registrationNumber}-sponsorship-letter.${fileExtension}`
         
         // Convert file to arrayBuffer for upload
         const arrayBuffer = await sponsorLetterFile.arrayBuffer()

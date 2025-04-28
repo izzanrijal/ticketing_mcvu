@@ -19,12 +19,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid file type. Only PDF and images are allowed." }, { status: 400 });
     }
 
-    // Create a timestamp for uniqueness
-    const timestamp = Date.now();
-    
-    // Create the filename with registration number prefix
-    const fileExtension = file.name.split('.').pop();
-    const fileName = `${registrationNumber}_sponsor_letter_${registrationId}_${timestamp}.${fileExtension}`;
+    // Create the filename with standardized format: MCVU-64602088-sponsorship-letter.pdf
+    const fileExtension = file.name.split('.').pop() || 'pdf';
+    const fileName = `${registrationNumber}-sponsorship-letter.${fileExtension}`;
     
     // Convert File to ArrayBuffer and then to Uint8Array
     const arrayBuffer = await file.arrayBuffer();
