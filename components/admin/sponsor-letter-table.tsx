@@ -13,9 +13,10 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Download } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Download, ExternalLink } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getSponsorLetterSignedUrl } from "@/lib/sponsor-letter-utils";
 
 interface SponsorLetter {
     id: string;
@@ -24,6 +25,7 @@ interface SponsorLetter {
     created_at: string;
     sponsor_letter_url: string;
     participants: { 
+        id: string;
         full_name: string;
         email: string;
     } | null; 
@@ -76,11 +78,45 @@ export function SponsorLetterTable() {
         fetchData();
     }, []); 
 
+    // Function to extract filename from URL
+    const getFilenameFromUrl = (url: string) => {
+        try {
+            // Try to extract from the pathname
+            const pathname = new URL(url).pathname;
+            const parts = pathname.split('/');
+            return parts[parts.length - 1] || 'sponsor-letter.pdf';
+        } catch (e) {
+            // If URL parsing fails, just return a default
+            return 'sponsor-letter.pdf';
+        }
+    };
+
+    // Validate the URL to ensure it's properly formatted
+    const getValidUrl = (url: string) => {
+        if (!url) return '';
+        
+        // Check if the URL is already complete with scheme
+        if (url.startsWith('http://') || url.startsWith('https://')) {
+            return url;
+        }
+        
+        // If it's a relative path or just a filename, assume it's in the Supabase bucket
+        if (url.startsWith('/') || !url.includes('/')) {
+            // Construct a proper Supabase storage URL
+            const bucketName = 'sponsor_letters';
+            const fileName = url.startsWith('/') ? url.substring(1) : url;
+            return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${bucketName}/${fileName}`;
+        }
+        
+        return url;
+    };
+
     if (loading) {
         return (
             <Card>
                 <CardHeader>
                     <CardTitle>Sponsor Guarantee Letters</CardTitle>
+                    <CardDescription>Loading sponsor letters...</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <Skeleton className="h-8 w-full mb-4" />
@@ -121,6 +157,7 @@ export function SponsorLetterTable() {
         <Card>
             <CardHeader>
                 <CardTitle>Sponsor Guarantee Letters</CardTitle>
+                <CardDescription>Review and download uploaded sponsor guarantee letters.</CardDescription>
             </CardHeader>
             <CardContent>
                 <Table>
@@ -143,12 +180,19 @@ export function SponsorLetterTable() {
                                 <TableCell><Badge variant={letter.status === 'confirmed' ? 'default' : 'secondary'}>{letter.status}</Badge></TableCell>
                                 <TableCell>{new Date(letter.created_at).toLocaleDateString()}</TableCell>
                                 <TableCell className="text-right">
-                                    {letter.sponsor_letter_url && (
+                                    {letter.sponsor_letter_url ? (
                                         <Button variant="outline" size="sm" asChild>
-                                            <Link href={letter.sponsor_letter_url} target="_blank" rel="noopener noreferrer">
+                                            <a 
+                                                href={getValidUrl(letter.sponsor_letter_url)} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer"
+                                                download={getFilenameFromUrl(letter.sponsor_letter_url)}
+                                            >
                                                 <Download className="mr-2 h-4 w-4" /> Download
-                                            </Link>
+                                            </a>
                                         </Button>
+                                    ) : (
+                                        <span className="text-muted-foreground text-sm">No file</span>
                                     )}
                                 </TableCell>
                             </TableRow>
