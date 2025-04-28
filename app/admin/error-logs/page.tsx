@@ -1,9 +1,9 @@
 import { ErrorLogs } from "@/components/admin/error-logs"
-import { DashboardLayout } from "@/components/admin/dashboard-layout"
+import { AdminDashboardLayout } from "@/components/admin/dashboard-layout"
 
 export default function ErrorLogsPage() {
   return (
-    <DashboardLayout>
+    <AdminDashboardLayout user={{}}>
       <div className="flex flex-col gap-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Error Logs</h1>
@@ -12,6 +12,6 @@ export default function ErrorLogsPage() {
 
         <ErrorLogs />
       </div>
-    </DashboardLayout>
+    </AdminDashboardLayout>
   )
 }

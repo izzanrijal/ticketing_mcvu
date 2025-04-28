@@ -26,7 +26,7 @@ interface WsParticipantData {
   registration_id: string | null;
   registration_number: string | null;
   registration_date: string | null;
-  registration_status: 'pending' | 'pending verification' | 'verified' | 'paid' | null;
+  registration_status: string | null;
   participant_id: string | null;
   participant_name: string | null;
   participant_email: string | null;
@@ -66,8 +66,6 @@ export function AdminWsParticipants() {
   const [resendingEmail, setResendingEmail] = useState<{ [key: string]: boolean }>({});
   const [showManualVerifyModal, setShowManualVerifyModal] = useState(false);
   const [selectedParticipant, setSelectedParticipant] = useState<WsParticipantData | null>(null);
-  const [relatedParticipants, setRelatedParticipants] = useState<WsParticipantData[]>([]);
-  const [relatedWorkshops, setRelatedWorkshops] = useState<{name: string, participant: string}[]>([]);
   const [isVerifying, setIsVerifying] = useState(false); 
   const [isResending, setIsResending] = useState<string | null>(null); 
 
@@ -210,9 +208,9 @@ export function AdminWsParticipants() {
       return;
     }
 
-    // Prevent re-verifying already verified or paid workshops
-    if (selectedParticipant.registration_status === 'verified' || selectedParticipant.registration_status === 'paid') {
-      toast({ title: "Info", description: "Workshop ini sudah diverifikasi atau dibayar.", variant: "secondary" });
+    // Prevent re-verifying already verified workshops
+    if (selectedParticipant.registration_status === 'verified') {
+      toast({ title: "Info", description: "Workshop ini sudah diverifikasi." });
       setShowManualVerifyModal(false);
       return;
     }
@@ -220,95 +218,27 @@ export function AdminWsParticipants() {
     setIsVerifying(true);
 
     try {
-      // Use the server-side API endpoint to perform verification
-      // This bypasses RLS and uses admin privileges, assuming access to this page means admin rights
-      const response = await fetch('/api/admin/manual-verify-workshop', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // No Authorization header needed, API relies on admin client and page access control
-        },
-        body: JSON.stringify({
-          workshop_registration_id: selectedParticipant.workshop_registration_id,
-          registration_id: selectedParticipant.registration_id,
-          registration_number: selectedParticipant.registration_number
-        }),
-      });
+      const { error } = await supabase
+        .from('participant_workshops')
+        .update({ status: 'verified' }) // Update status to 'verified'
+        .eq('id', selectedParticipant.workshop_registration_id); // Target the specific workshop enrollment
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        console.error("Error response from API:", result);
-        throw new Error(result.error || result.details || "Gagal memverifikasi workshop.");
+      if (error) {
+        console.error("Error updating workshop status:", error);
+        throw new Error(error.message || "Gagal memperbarui status workshop.");
       }
 
-      console.log("Verification result:", result);
-
-      toast({ 
-        title: "Sukses", 
-        description: `Workshop '${selectedParticipant.workshop_name}' untuk ${selectedParticipant.participant_name} berhasil diverifikasi dan dibayar.` 
-      });
-      
+      toast({ title: "Sukses", description: `Workshop '${selectedParticipant.workshop_name}' untuk ${selectedParticipant.participant_name} berhasil diverifikasi.` });
       fetchWsParticipants(); // Refresh the list
       setShowManualVerifyModal(false); // Close modal
 
     } catch (err: any) {
       console.error("Verification failed:", err);
-      toast({ 
-        title: "Error", 
-        description: err.message || "Terjadi kesalahan saat verifikasi.", 
-        variant: "destructive" 
-      });
+      toast({ title: "Error", description: err.message || "Terjadi kesalahan saat verifikasi.", variant: "destructive" });
     } finally {
       setIsVerifying(false);
     }
   }
-
-  // Function to fetch all items purchased under the same registration number
-  const fetchRelatedItems = async (participant: WsParticipantData) => {
-    if (!participant.registration_id || !participant.registration_number) {
-      // If there's no registration ID or number, there are no related items
-      setRelatedParticipants([]);
-      setRelatedWorkshops([]);
-      return;
-    }
-
-    try {
-      // Fetch all participants and workshops with the same registration number
-      const { data, error } = await supabase
-        .from('workshop_registration_summary')
-        .select('*')
-        .eq('registration_number', participant.registration_number);
-
-      if (error) {
-        console.error("Error fetching related items:", error);
-        toast({ 
-          title: "Error", 
-          description: `Gagal mengambil data terkait: ${error.message}`, 
-          variant: "destructive" 
-        });
-        return;
-      }
-
-      // Set the related participants
-      setRelatedParticipants(data || []);
-
-      // Create a list of all workshops purchased in this registration
-      const workshops = (data || []).map(item => ({
-        name: item.workshop_name || 'Unknown Workshop',
-        participant: item.participant_name || 'Unknown Participant'
-      }));
-      setRelatedWorkshops(workshops);
-
-    } catch (err: any) {
-      console.error("Error in fetchRelatedItems:", err);
-      toast({ 
-        title: "Error", 
-        description: `Terjadi kesalahan saat mengambil data terkait: ${err.message || JSON.stringify(err)}`, 
-        variant: "destructive" 
-      });
-    }
-  };
 
   const handleResendEmail = async (participantId: string, email: string) => {
     // ... (Keep existing logic, verify relevance/backend support) ...
@@ -424,11 +354,7 @@ export function AdminWsParticipants() {
                            );
                          } else if (p.registration_status === 'pending' || p.registration_status === 'pending verification') {
                             return (
-                                <Button variant="outline" size="sm" onClick={() => { 
-                                  setSelectedParticipant(p); 
-                                  fetchRelatedItems(p);
-                                  setShowManualVerifyModal(true); 
-                                }} disabled={isVerifying || p.registration_status === 'verified' || p.registration_status === 'paid'}>
+                                <Button variant="outline" size="sm" onClick={() => { setSelectedParticipant(p); setShowManualVerifyModal(true); }} disabled={isVerifying || p.registration_status === 'verified'}>
                                 Verifikasi Manual WS
                                 </Button>
                             );
@@ -452,60 +378,23 @@ export function AdminWsParticipants() {
 
       {/* Modals (Manual Verification, Resend Email) - Keep if needed */}
       <Dialog open={showManualVerifyModal} onOpenChange={setShowManualVerifyModal}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent>
               <DialogHeader>
-                  <DialogTitle>Verifikasi Manual Pembayaran Workshop</DialogTitle>
+                  <DialogTitle>Verifikasi Manual Kehadiran Workshop</DialogTitle>
+                  <DialogDescription>
+                    Konfirmasi verifikasi untuk peserta:
+                    <br />
+                    Nama: <strong>{selectedParticipant?.participant_name ?? 'N/A'}</strong>
+                    <br />
+                    Workshop: <strong>{selectedParticipant?.workshop_name ?? 'N/A'}</strong>
+                    <br />
+                    No. Registrasi: <strong>{selectedParticipant?.registration_number ?? 'N/A'}</strong>
+                  </DialogDescription>
               </DialogHeader>
-              
-              {/* Replace DialogDescription with div to avoid nesting errors */}
-              <div className="text-sm text-muted-foreground py-4">
-                <div className="mt-2 mb-4">
-                  <h3 className="font-medium text-lg">Informasi Registrasi:</h3>
-                  <div className="mt-2 p-3 bg-muted rounded-md">
-                    <div>No. Registrasi: <strong>{selectedParticipant?.registration_number ?? 'N/A'}</strong></div>
-                    <div>Status: <strong>{selectedParticipant?.registration_status ?? 'N/A'}</strong></div>
-                    {selectedParticipant?.payment_nominal && (
-                      <div>Nominal Pembayaran: <strong>{new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(selectedParticipant.payment_nominal)}</strong></div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="mt-4">
-                  <h3 className="font-medium text-lg">Item yang dibeli dalam registrasi ini:</h3>
-                  {relatedWorkshops.length > 0 ? (
-                    <div className="mt-2 border rounded-md overflow-hidden">
-                      <table className="w-full">
-                        <thead className="bg-muted">
-                          <tr>
-                            <th className="px-4 py-2 text-left">Workshop</th>
-                            <th className="px-4 py-2 text-left">Peserta</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {relatedWorkshops.map((item, index) => (
-                            <tr key={index} className="border-t">
-                              <td className="px-4 py-2">{item.name}</td>
-                              <td className="px-4 py-2">{item.participant}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <div className="text-sm text-muted-foreground">Tidak ada item terkait yang ditemukan.</div>
-                  )}
-                </div>
-
-                <div className="mt-4 p-3 bg-yellow-50 text-yellow-800 rounded-md">
-                  <div className="font-medium">Perhatian:</div>
-                  <div className="text-sm">Verifikasi manual akan mengubah status menjadi <strong>PAID</strong> untuk semua item dalam registrasi ini.</div>
-                </div>
-              </div>
-              
               <DialogFooter>
                   <Button variant="outline" onClick={() => setShowManualVerifyModal(false)} disabled={isVerifying}>Batal</Button>
                   <Button onClick={handleManualVerification} disabled={isVerifying}> 
-                    {isVerifying ? <><ReloadIcon className="mr-2 h-4 w-4 animate-spin" /> Memverifikasi...</> : "Konfirmasi Pembayaran"}
+                    {isVerifying ? <><ReloadIcon className="mr-2 h-4 w-4 animate-spin" /> Memverifikasi...</> : "Konfirmasi Verifikasi"}
                   </Button>
               </DialogFooter>
           </DialogContent>
