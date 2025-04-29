@@ -1,6 +1,48 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 
+// Function to validate the Turnstile token
+async function validateTurnstileToken(token: string | null): Promise<boolean> {
+  if (!token) {
+    console.warn("Turnstile validation skipped: No token provided.");
+    return false;
+  }
+
+  const secretKey = process.env.TURNSTILE_SECRET_KEY;
+  if (!secretKey) {
+    console.error("Turnstile secret key is not set in environment variables.");
+    return false; // Should not proceed without a secret key
+  }
+
+  try {
+    const response = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        secret: secretKey,
+        response: token,
+        // Optionally, pass the user's IP address
+        // remoteip: request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For'),
+      }),
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      console.log("Turnstile validation successful.");
+      return true;
+    } else {
+      console.warn("Turnstile validation failed:", data['error-codes'] || 'Unknown error');
+      return false;
+    }
+  } catch (error) {
+    console.error("Error validating Turnstile token:", error);
+    return false;
+  }
+}
+
 export async function GET(request: Request) {
   try {
     // Use service role key to bypass RLS
@@ -10,9 +52,17 @@ export async function GET(request: Request) {
       },
     })
 
-    // Get registration number from query params
+    // Get registration number and turnstile token from query params
     const url = new URL(request.url)
     const registrationNumber = url.searchParams.get('registrationNumber')
+    const turnstileToken = url.searchParams.get('turnstileToken')
+
+    // ---- Turnstile Validation ----
+    const isHuman = await validateTurnstileToken(turnstileToken);
+    if (!isHuman) {
+      return NextResponse.json({ error: "Verifikasi CAPTCHA gagal." }, { status: 403 });
+    }
+    // ---- End Turnstile Validation ----
 
     if (!registrationNumber) {
       return NextResponse.json({ error: "Nomor pendaftaran diperlukan" }, { status: 400 })

@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Turnstile } from "@marsidev/react-turnstile"
 
 const formSchema = z.object({
   participant_count: z.coerce
@@ -33,10 +34,11 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>
 
 type CategorySelectionProps = {
-  onNext: (data: FormValues) => void
+  onSubmit: (data: FormValues) => void
+  onTurnstileSuccess: (token: string) => void
 }
 
-export function CategorySelection({ onNext }: CategorySelectionProps) {
+export function CategorySelection({ onSubmit, onTurnstileSuccess }: CategorySelectionProps) {
   const supabase = createClientComponentClient()
 
   const form = useForm<FormValues>({
@@ -49,7 +51,7 @@ export function CategorySelection({ onNext }: CategorySelectionProps) {
 
 
 
-  function onSubmit(data: FormValues) {
+  function handleFormSubmit(data: FormValues) {
     // Manual validation for sponsor letter when payment type is sponsor
     if (data.payment_type === "sponsor") {
       if (!data.sponsor_letter) {
@@ -81,7 +83,7 @@ export function CategorySelection({ onNext }: CategorySelectionProps) {
       }
     }
 
-    onNext(data)
+    onSubmit(data)
   }
 
   return (
@@ -92,7 +94,7 @@ export function CategorySelection({ onNext }: CategorySelectionProps) {
       </div>
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+        <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-8">
 
 
           {/* Participant Count Section */}
@@ -263,6 +265,15 @@ export function CategorySelection({ onNext }: CategorySelectionProps) {
               )}
             />
           )}
+
+          <div className="my-6">
+            <Turnstile
+              siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || ""}
+              onSuccess={onTurnstileSuccess}
+              options={{ theme: "light" }}
+              className="mx-auto"
+            />
+          </div>
 
           <div className="flex justify-end">
             <Button type="submit">Lanjut</Button>

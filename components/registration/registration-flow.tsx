@@ -56,6 +56,7 @@ export function RegistrationFlow() {
   })
   const [registrationId, setRegistrationId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
   const router = useRouter()
   const { toast } = useToast()
   const supabase = createClientComponentClient()
@@ -70,6 +71,16 @@ export function RegistrationFlow() {
     payment_type: "self" | "sponsor"
     sponsor_letter?: File
   }) => {
+    // Check if Turnstile token exists
+    if (!turnstileToken) {
+      toastRef.current.toast({
+        title: "Verifikasi Gagal",
+        description: "Mohon selesaikan verifikasi CAPTCHA.",
+        variant: "destructive",
+      })
+      return
+    }
+
     // Create empty participants based on count
     const participants = Array(data.participant_count)
       .fill(null)
@@ -176,6 +187,7 @@ export function RegistrationFlow() {
           registrationData: registrationDataCopy,
           registrationNumber,
           totalAmount,
+          turnstileToken, // Add the token here
         }))
         
         // Add file separately if it exists
@@ -229,13 +241,17 @@ export function RegistrationFlow() {
         return
       } catch (apiError) {
         console.error("API registration failed:", apiError)
-        throw new Error(`API registration failed: ${apiError.message}`)
+        // Check if apiError is an instance of Error before accessing message
+        const errorMessage = apiError instanceof Error ? apiError.message : "An unknown error occurred during API registration."
+        throw new Error(`API registration failed: ${errorMessage}`)
       }
     } catch (error) {
       console.error("Registration error:", error)
+      // Check if error is an instance of Error before accessing message
+      const errorMessage = error instanceof Error ? error.message : "An unknown error occurred during registration."
       toastRef.current.toast({
         title: "Pendaftaran Gagal",
-        description: `Terjadi kesalahan saat mendaftar: ${error.message}. Silakan coba lagi atau hubungi administrator.`,
+        description: `Terjadi kesalahan saat mendaftar: ${errorMessage}. Silakan coba lagi atau hubungi administrator.`,
         variant: "destructive",
       })
     } finally {
@@ -270,7 +286,10 @@ export function RegistrationFlow() {
         </TabsList>
 
         <TabsContent value="step-1" className="p-6">
-          <CategorySelection onNext={handleCategorySelection} />
+          <CategorySelection
+            onSubmit={handleCategorySelection}
+            onTurnstileSuccess={setTurnstileToken} // Pass the function as a prop
+          />
         </TabsContent>
 
         <TabsContent value="step-2" className="p-6">

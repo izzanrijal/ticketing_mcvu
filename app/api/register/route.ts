@@ -3,6 +3,48 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { schedulePaymentCheck } from "@/lib/payment-check-scheduler"
 import { sendRegistrationInvoice } from "@/lib/notifications"
 
+// Function to validate the Turnstile token (copied from check-registration route)
+async function validateTurnstileToken(token: string | null): Promise<boolean> {
+  if (!token) {
+    console.warn("Turnstile validation skipped: No token provided.");
+    return false;
+  }
+
+  const secretKey = process.env.TURNSTILE_SECRET_KEY;
+  if (!secretKey) {
+    console.error("Turnstile secret key is not set in environment variables.");
+    return false; // Should not proceed without a secret key
+  }
+
+  try {
+    const response = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        secret: secretKey,
+        response: token,
+        // Optionally, pass the user's IP address (consider privacy implications)
+        // remoteip: request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For'),
+      }),
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      console.log("Turnstile validation successful.");
+      return true;
+    } else {
+      console.warn("Turnstile validation failed:", data['error-codes'] || 'Unknown error');
+      return false;
+    }
+  } catch (error) {
+    console.error("Error validating Turnstile token:", error);
+    return false;
+  }
+}
+
 // Function to generate a unique QR code ID
 function generateQRCodeId() {
   // Format kode booking tiket pesawat: 6 karakter alfanumerik (huruf kapital dan angka)
@@ -52,6 +94,7 @@ export async function POST(request: Request) {
     let registrationNumber: string
     let totalAmount: number
     let sponsorLetterFile: File | null = null
+    let turnstileToken: string | null = null // Variable to hold the token
     
     if (contentType.includes('multipart/form-data')) {
       // Handle multipart form data
@@ -64,6 +107,7 @@ export async function POST(request: Request) {
         registrationData = parsedData.registrationData
         registrationNumber = parsedData.registrationNumber
         totalAmount = parsedData.totalAmount
+        turnstileToken = parsedData.turnstileToken // Extract token
       } else {
         throw new Error('Missing required JSON data in form')
       }
@@ -71,14 +115,23 @@ export async function POST(request: Request) {
       // Get file
       sponsorLetterFile = formData.get('sponsor_letter') as File | null
     } else {
-      // Handle JSON data (for backward compatibility)
+      // Handle JSON data (for backward compatibility or direct JSON requests)
       const jsonData = await request.json()
       registrationData = jsonData.registrationData
       registrationNumber = jsonData.registrationNumber
       totalAmount = jsonData.totalAmount
+      turnstileToken = jsonData.turnstileToken // Extract token
     }
 
-    console.log("API received data:", { registrationNumber, totalAmount })
+    // ---- Turnstile Validation ----
+    const isHuman = await validateTurnstileToken(turnstileToken);
+    if (!isHuman) {
+      console.warn("Turnstile validation failed for registration attempt.");
+      return NextResponse.json({ error: "Verifikasi CAPTCHA gagal. Mohon refresh halaman dan coba lagi." }, { status: 403 });
+    }
+    // ---- End Turnstile Validation ----
+
+    console.log("API received data (post-validation):", { registrationNumber, totalAmount })
     console.log("Participant count:", registrationData.participants.length)
 
     // Recalculate total amount to ensure accuracy
