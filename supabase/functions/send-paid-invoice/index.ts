@@ -94,7 +94,7 @@ const participantTypeMap: { [key: string]: string } = {
     'resident': 'PPDS',
     'nurse': 'Perawat',
     'student': 'Mahasiswa Kedokteran',
-    'other': 'Lainnya',
+    'other': 'Dokter Residen',
 };
 
 serve(async (req: Request) => {

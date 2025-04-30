@@ -52,7 +52,7 @@ const participantTypeMap: { [key: string]: string } = {
   'general_doctor': 'Dokter Umum',
   'nurse': 'Perawat',
   'student': 'Mahasiswa',
-  'other': 'Lainnya',
+  'other': 'Dokter Residen',
 };
 
 export function AdminWsParticipants() {

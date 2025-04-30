@@ -137,8 +137,10 @@ function ParticipantsReport() {
         return "Perawat"
       case "student":
         return "Mahasiswa"
+      case "other":
+        return "Dokter Residen"
       default:
-        return "Lainnya"
+        return "Dokter Residen"
     }
   }
 
@@ -263,7 +265,7 @@ function ParticipantsReport() {
                 <SelectItem value="general_doctor">Dokter Umum</SelectItem>
                 <SelectItem value="nurse">Perawat</SelectItem>
                 <SelectItem value="student">Mahasiswa</SelectItem>
-                <SelectItem value="other">Lainnya</SelectItem>
+                <SelectItem value="other">Dokter Residen</SelectItem>
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>

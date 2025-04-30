@@ -50,8 +50,10 @@ export function ParticipantTypeChart() {
         return "Perawat"
       case "student":
         return "Mahasiswa"
+      case "other":
+        return "Dokter Residen"
       default:
-        return "Lainnya"
+        return "Dokter Residen"
     }
   }
 

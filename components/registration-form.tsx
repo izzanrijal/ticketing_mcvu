@@ -331,7 +331,7 @@ export function RegistrationForm() {
                           <SelectItem value="general_doctor">Dokter Umum</SelectItem>
                           <SelectItem value="nurse">Perawat</SelectItem>
                           <SelectItem value="student">Mahasiswa</SelectItem>
-                          <SelectItem value="other">Lainnya</SelectItem>
+                          <SelectItem value="other">Dokter Residen</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />

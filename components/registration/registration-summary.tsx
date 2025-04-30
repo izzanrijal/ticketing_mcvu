@@ -154,8 +154,10 @@ export function RegistrationSummary({ registrationData, onConfirm, onBack, loadi
         return "Perawat"
       case "student":
         return "Mahasiswa"
+      case "other":
+        return "Dokter Residen"
       default:
-        return "Lainnya"
+        return "Dokter Residen"
     }
   }
 

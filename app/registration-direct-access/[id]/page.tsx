@@ -247,7 +247,7 @@ export default function RegistrationDirectAccessPage({
                               ? "Perawat"
                               : participant.participant_type === "student"
                                 ? "Mahasiswa"
-                                : "Lainnya"}
+                                : "Dokter Residen"}
                       </div>
                     </div>
                     {participant.institution && (

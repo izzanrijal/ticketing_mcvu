@@ -273,7 +273,7 @@ export function ParticipantDetails({ participants, ticketId, onNext, onBack }: P
       case "student":
         return "Mahasiswa"
       default:
-        return "Lainnya"
+        return "Dokter Residen"
     }
   }
 
@@ -409,7 +409,7 @@ export function ParticipantDetails({ participants, ticketId, onNext, onBack }: P
                     <SelectItem value="general_doctor">Dokter Umum</SelectItem>
                     <SelectItem value="nurse">Perawat</SelectItem>
                     <SelectItem value="student">Mahasiswa</SelectItem>
-                    <SelectItem value="other">Lainnya</SelectItem>
+                    <SelectItem value="other">Dokter Residen</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

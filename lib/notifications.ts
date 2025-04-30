@@ -14,7 +14,7 @@ const participantTypeMap: { [key: string]: string } = {
     resident: 'Dokter Residen',
     nurse: 'Perawat',
     student: 'Mahasiswa', // Corrected mapping
-    other: 'Lainnya',
+    other: 'Dokter Residen',
 };
 
 interface ContactPerson {
@@ -874,7 +874,7 @@ export async function generatePaidInvoicePdf(
         participants,
         ticketData,
         workshopDetailsMap,
-        participantTypeMap,
+        participantTypeMap, 
         qrCodeData, // <<< New parameter
         // bankAccount // Not needed for paid invoice
     } = params;
@@ -950,7 +950,7 @@ export async function generatePaidInvoicePdf(
 
         // Add Symposium Row if attending
         if (p.attendSymposium && ticketData) {
-            const symposiumTitle = ticketData.name ?? 'Symposium'; // Use ticket title or placeholder
+            const symposiumTitle = ticketData?.name ?? 'Symposium';
             let symposiumPrice = 0;
 
             // --- Refactored Price Lookup --- 

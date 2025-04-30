@@ -35,7 +35,9 @@ export function ParticipantTicket({ participant, ticketName, index }: Participan
                   ? "Perawat"
                   : participant.participant_type === "student"
                     ? "Mahasiswa"
-                    : "Lainnya"}
+                    : participant.participant_type === "resident_doctor"
+                      ? "Dokter Residen"
+                      : "Dokter Residen"}
           </div>
 
           {participant.institution && (

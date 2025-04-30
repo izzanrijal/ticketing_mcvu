@@ -345,7 +345,9 @@ export default async function RegistrationDetailsPage({
                     <Alert>
                       <AlertCircle className="h-4 w-4" />
                       <AlertTitle>Tidak Ada Peserta</AlertTitle>
-                      <AlertDescription>Tidak ada peserta yang terdaftar dengan nomor registrasi ini.</AlertDescription>
+                      <AlertDescription>
+                        Tidak ada peserta yang terdaftar dengan nomor registrasi ini.
+                      </AlertDescription>
                     </Alert>
                   ) : (
                     <div className="space-y-4">
@@ -382,7 +384,9 @@ export default async function RegistrationDetailsPage({
                                         ? "Perawat"
                                         : participant.participant_type === "student"
                                           ? "Mahasiswa"
-                                          : "Lainnya"}
+                                          : participant.participant_type === "resident_doctor"
+                                            ? "Dokter Residen"
+                                            : "Dokter Residen"}
                                 </div>
 
                                 {participant.institution && (

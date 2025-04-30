@@ -156,7 +156,7 @@ export async function POST(request: Request) {
                 'general_doctor': 'Dokter Umum',
                 'nurse': 'Perawat',
                 'student': 'Mahasiswa',
-                'other': 'Lainnya'
+                'other': 'Dokter Residen'
             },
             qrCodeData: qrCodeDataUrl
         };

@@ -121,7 +121,7 @@ export function PaymentDetails({ registration }: PaymentDetailsProps) {
                           ? "Perawat"
                           : registrationItem.participant.participant_type === "student"
                             ? "Mahasiswa"
-                            : "Lainnya"}
+                            : "Dokter Residen"}
                   </div>
                 </div>
               </div>

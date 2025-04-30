@@ -38,7 +38,7 @@ const categoryDisplayNames = {
   'general_doctor': 'Dokter Umum',
   'nurse': 'Perawat',
   'student': 'Mahasiswa',
-  'other': 'Lainnya'
+  'other': 'Dokter Residen'
 };
 serve(async (req)=>{
   console.log(`--- New Request Received: ${req.method} ${req.url} ---`);

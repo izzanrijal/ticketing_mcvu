@@ -45,7 +45,7 @@ const participantTypeMap: { [key: string]: string } = {
   'general_doctor': 'Dokter Umum',
   'nurse': 'Perawat',
   'student': 'Mahasiswa',
-  'other': 'Lainnya',
+  'other': 'Dokter Residen',
 };
 
 export function AdminParticipants() {
@@ -129,8 +129,10 @@ export function AdminParticipants() {
         return "Perawat"
       case "student":
         return "Mahasiswa"
+      case "other":
+        return "Dokter Residen"
       default:
-        return "Lainnya"
+        return "Dokter Residen"
     }
   }
 
@@ -476,7 +478,7 @@ export function AdminParticipants() {
               <SelectItem value="general_doctor">Dokter Umum</SelectItem>
               <SelectItem value="nurse">Perawat</SelectItem>
               <SelectItem value="student">Mahasiswa</SelectItem>
-              <SelectItem value="other">Lainnya</SelectItem>
+              <SelectItem value="other">Dokter Residen</SelectItem>
             </SelectContent>
           </Select>
           <Button variant="outline" size="icon" onClick={exportToExcel} disabled={participants.length === 0}>
