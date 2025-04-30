@@ -307,7 +307,7 @@ const PaymentSummary: React.FC<PaymentSummaryProps> = ({
           <div className="flex space-x-2">
             <Input
               id="promo-code"
-              placeholder="MCVU2025"
+              placeholder="Masukkan Kode Promo"
               value={promoCode}
               onChange={(e) => onPromoCodeChange(e.target.value)}
               className="uppercase"

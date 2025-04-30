@@ -190,7 +190,7 @@ export default function CheckStatusPage() {
               )}
               {(!paymentData || paymentData.status === "pending") && (
                 <div className="mt-4 text-center text-sm text-amber-600">
-                  Silakan lakukan pembayaran untuk konfirmasi pendaftaran Anda. Bila sudah melakukan pembayaran, mohon tunggu 1x24 jam, bila belum terverifikasi silahkan menghubungi panitia MCVU 2025.
+                  Silakan lakukan pembayaran untuk konfirmasi pendaftaran Anda. Bila sudah melakukan pembayaran, mohon tunggu 5x24 jam, bila belum terverifikasi silahkan menghubungi panitia MCVU 2025.
                 </div>
               )}
               {paymentData && paymentData.status === "rejected" && (

@@ -821,7 +821,7 @@ const PaymentSummary = ({
           <div className="flex space-x-2">
             <Input
               id="promo-code"
-              placeholder="MCVU2025"
+              placeholder="Masukkan Kode Promo"
               value={promoCode}
               onChange={(e) => setPromoCode(e.target.value)}
               className="uppercase"

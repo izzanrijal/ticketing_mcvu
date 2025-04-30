@@ -284,7 +284,7 @@ export function PaymentInstructions({ registrationId }: PaymentInstructionsProps
             Harap <strong>screenshot halaman ini</strong> atau <strong>catat nomor pendaftaran Anda</strong> untuk
             referensi di masa mendatang.
           </p>
-          <p className="mt-2">Pembayaran akan diverifikasi dalam 1-2 hari kerja setelah transfer dilakukan.</p>
+          <p className="mt-2">Pembayaran akan diverifikasi dalam 3-5 hari kerja setelah transfer dilakukan.</p>
         </AlertDescription>
       </Alert>
 
@@ -443,7 +443,7 @@ export function PaymentInstructions({ registrationId }: PaymentInstructionsProps
                 <div className="rounded-md border p-4 space-y-2">
                   <p className="text-sm">
                     Untuk pembayaran melalui sponsor atau institusi, silakan kirimkan surat pengantar resmi dari
-                    institusi Anda ke email <strong>mcvu2025@example.com</strong> dengan menyertakan:
+                    institusi Anda ke email <strong>panitia.mcvu@perkimakassar.com</strong> dengan menyertakan:
                   </p>
                   <ol className="list-decimal list-inside space-y-1 text-sm">
                     <li>Nomor registrasi: {registration.registration_number}</li>

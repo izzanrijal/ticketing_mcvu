@@ -424,7 +424,7 @@ export default async function RegistrationDetailsPage({
                     <AlertTitle>Penting</AlertTitle>
                     <AlertDescription>
                       Jika Anda belum menerima tiket, silakan periksa folder spam email Anda atau hubungi panitia di
-                      info@mcvu2025.com
+                      panitia.mcvu@perkimakassar.com
                     </AlertDescription>
                   </Alert>
                 ) : (

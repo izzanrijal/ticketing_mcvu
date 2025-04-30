@@ -32,35 +32,45 @@ export function ParticipantCard({ participant, index, ticketId, onUpdate }: Part
   useEffect(() => {
     async function fetchData() {
       try {
-        // Fetch ticket details
-        if (ticketId) {
-          console.log("Fetching ticket with ID:", ticketId)
-
-          // Pastikan ticketId adalah UUID yang valid
-          if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ticketId)) {
-            console.error("Invalid ticketId format:", ticketId)
-            return
-          }
-
-          // Lanjutkan dengan fetch ticket details
-          const { data, error } = await supabase.from("tickets").select("*").eq("id", ticketId).single()
+        let resolvedTicketId = ticketId
+        if (ticketId && ticketId !== "invalid-format") {
+          console.log(`fetchData: Using provided ticketId: ${ticketId}`)
+          // Valid ticketId provided
+          const { data, error } = await supabase
+            .from("tickets")
+            .select("*") // Select all fields, not just id
+            .eq("id", ticketId)
+            .single()
 
           if (error) {
-            console.error("Error fetching ticket:", error)
+            console.error(`Error fetching ticket with ID ${ticketId}:`, error)
+            // Log more details about the error
+            console.log("Error code:", error.code)
+            console.log("Error message:", error.message)
+            console.log("Error details:", error.details)
           } else if (data) {
             console.log("Ticket data fetched successfully:", data)
             setTicketDetails(data)
           } else {
-            console.log("No ticket data found for ID:", ticketId)
+            console.log(`No ticket data found for ID: ${ticketId}`)
           }
         } else {
-          console.log("No ticketId provided, using default ID")
-          // Gunakan ID default jika tidak ada ticketId
-          const defaultTicketId = "3d271769-9e63-4eab-aa6a-6d56c28d556f"
-          const { data, error } = await supabase.from("tickets").select("*").eq("id", defaultTicketId).single()
+          // No valid ticketId provided, use default
+          const defaultTicketId = "7a15592e-b7a1-4ff8-b289-512f213e5b77"
+          resolvedTicketId = defaultTicketId
+          console.log(`fetchData: No valid ticketId prop, using default: ${defaultTicketId}`)
+          const { data, error } = await supabase
+            .from("tickets")
+            .select("*") // Select all fields, not just id
+            .eq("id", defaultTicketId)
+            .single()
 
           if (error) {
-            console.error("Error fetching default ticket:", error)
+            console.error(`Error fetching default ticket with ID ${defaultTicketId}:`, error)
+            // Log more details about the error
+            console.log("Error code:", error.code)
+            console.log("Error message:", error.message)
+            console.log("Error details:", error.details)
           } else if (data) {
             console.log("Default ticket data fetched successfully:", data)
             setTicketDetails(data)
@@ -77,6 +87,7 @@ export function ParticipantCard({ participant, index, ticketId, onUpdate }: Part
           console.error("Error fetching workshops:", workshopsError)
           console.log("Error code:", workshopsError.code)
           console.log("Error message:", workshopsError.message)
+          console.log("Error details:", workshopsError.details)
         } else {
           console.log("Workshops data fetched successfully:", workshopsData)
           setWorkshops(workshopsData || [])
@@ -153,14 +164,14 @@ export function ParticipantCard({ participant, index, ticketId, onUpdate }: Part
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor={`full-name-${index}`}>
-              Nama Lengkap Disertai Gelar <span className="text-red-500">*</span>
+              Nama Lengkap (Disertai Gelar) <span className="text-red-500">*</span>
             </Label>
             <Input
               id={`full-name-${index}`}
               name="full_name"
               value={participantData.full_name}
               onChange={handleChange}
-              placeholder="Masukkan nama lengkap"
+              placeholder="Masukkan nama lengkap disertai gelar"
               required
             />
           </div>
@@ -196,7 +207,7 @@ export function ParticipantCard({ participant, index, ticketId, onUpdate }: Part
           </div>
           <div className="space-y-2">
             <Label htmlFor={`nik-${index}`}>
-              NIK <span className="text-red-500">*</span>
+              NIK (Untuk keperluan sertifikat) <span className="text-red-500">*</span>
             </Label>
             <Input
               id={`nik-${index}`}
@@ -212,7 +223,7 @@ export function ParticipantCard({ participant, index, ticketId, onUpdate }: Part
 
         <div className="space-y-2">
           <Label htmlFor={`participant-type-${index}`}>
-            Tipe Peserta <span className="text-red-500">*</span>
+            Kategori Peserta <span className="text-red-500">*</span>
           </Label>
           <Select
             name="participant_type"
@@ -235,7 +246,7 @@ export function ParticipantCard({ participant, index, ticketId, onUpdate }: Part
 
         <div className="space-y-2">
           <Label htmlFor={`institution-${index}`}>
-            Institusi <span className="text-red-500">*</span>
+            Asal Institusi <span className="text-red-500">*</span>
           </Label>
           <Input
             id={`institution-${index}`}
@@ -283,6 +294,14 @@ export function ParticipantCard({ participant, index, ticketId, onUpdate }: Part
                       Rp {(() => {
                         const priceKey = `price_${participantData.participant_type}`
                         const price = ticketDetails[priceKey]
+                        
+                        // Add detailed logging for debugging
+                        console.log('Price calculation:', {
+                          participantType: participantData.participant_type,
+                          priceKey,
+                          ticketDetails,
+                          price
+                        })
 
                         if (price !== undefined && price !== null) {
                           return price.toLocaleString("id-ID")

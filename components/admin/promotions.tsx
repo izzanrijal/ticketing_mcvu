@@ -352,7 +352,7 @@ export function AdminPromotions() {
                   id="code"
                   value={formData.code}
                   onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                  placeholder="MCVU2025"
+                  placeholder="Masukkan Kode Promo"
                   className="uppercase"
                 />
               </div>

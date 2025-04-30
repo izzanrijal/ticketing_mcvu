@@ -300,21 +300,16 @@ export async function POST(request: Request) {
     }
 
     // Tambahkan kolom opsional jika ada dalam skema
-    const registrationData1 = { ...registrationBase }
-
-    // Cek dan tambahkan kolom total_amount jika ada
-    if (registrationColumns && Object.keys(registrationColumns).includes("total_amount")) {
-      (registrationData1 as any)["total_amount"] = verifiedTotalAmount
+    // Selalu tambahkan total_amount (sebelum deduction) dan final_amount (setelah deduction)
+    const registrationData1 = {
+      ...registrationBase,
+      total_amount: verifiedTotalAmount,    // Total cost before unique deduction
+      final_amount: uniqueFinalAmount,    // Amount to be paid after unique deduction
     }
 
     // Cek dan tambahkan kolom discount_amount jika ada
     if (registrationColumns && Object.keys(registrationColumns).includes("discount_amount")) {
       (registrationData1 as any)["discount_amount"] = discountAmount
-    }
-
-    // Cek dan tambahkan kolom final_amount jika ada
-    if (registrationColumns && Object.keys(registrationColumns).includes("final_amount")) {
-      (registrationData1 as any)["final_amount"] = uniqueFinalAmount
     }
 
     // Cek dan tambahkan kolom notes jika ada
