@@ -103,7 +103,7 @@ export function SponsorLetterTable() {
         // If it's a relative path or just a filename, assume it's in the Supabase bucket
         if (url.startsWith('/') || !url.includes('/')) {
             // Construct a proper Supabase storage URL
-            const bucketName = 'sponsor_letters';
+            const bucketName = 'Sponsor Letters';
             const fileName = url.startsWith('/') ? url.substring(1) : url;
             return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${bucketName}/${fileName}`;
         }

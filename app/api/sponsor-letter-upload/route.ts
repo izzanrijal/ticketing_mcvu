@@ -30,7 +30,7 @@ export async function POST(request: Request) {
     // Upload file to Supabase Storage
     const { data, error } = await supabaseAdmin
       .storage
-      .from('sponsor_letters')
+      .from('Sponsor Letters')
       .upload(fileName, uint8Array, {
         contentType: file.type,
         upsert: true
@@ -44,13 +44,16 @@ export async function POST(request: Request) {
     // Get the public URL for the uploaded file
     const { data: publicUrlData } = supabaseAdmin
       .storage
-      .from('sponsor_letters')
+      .from('Sponsor Letters')
       .getPublicUrl(fileName);
     
-    // Update the registration record with the sponsor letter URL
+    // Update the registration record with both the sponsor letter URL and path
     const { error: updateError } = await supabaseAdmin
       .from('registrations')
-      .update({ sponsor_letter_url: publicUrlData.publicUrl })
+      .update({ 
+        sponsor_letter_url: publicUrlData.publicUrl,
+        sponsor_letter_path: data.path
+      })
       .eq('id', registrationId);
     
     if (updateError) {

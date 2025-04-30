@@ -619,7 +619,7 @@ export async function POST(request: Request) {
         
         const { data: uploadData, error: uploadError } = await supabase
           .storage
-          .from('sponsor_letters')
+          .from('Sponsor Letters')
           .upload(fileName, fileBuffer, {
             contentType: 'application/pdf'
           })
@@ -627,15 +627,25 @@ export async function POST(request: Request) {
         if (uploadError) {
           console.error("File upload error:", uploadError)
         } else {
-          // Update registration with sponsor letter URL
+          // Get the public URL for the uploaded file
+          const { data: publicUrlData } = supabase
+            .storage
+            .from('Sponsor Letters')
+            .getPublicUrl(fileName);
+
+          // Update registration with both path and URL
           await supabase
             .from('registrations')
             .update({ 
-              sponsor_letter_url: uploadData.path 
+              sponsor_letter_path: uploadData.path,
+              sponsor_letter_url: publicUrlData.publicUrl
             })
             .eq('id', registrationId)
             
-          console.log("Sponsor letter uploaded successfully:", uploadData.path)
+          console.log("Sponsor letter uploaded successfully:", {
+            path: uploadData.path,
+            url: publicUrlData.publicUrl
+          })
         }
       } catch (fileError) {
         console.error("Error processing sponsor letter:", fileError)

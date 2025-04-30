@@ -38,7 +38,7 @@ const categoryDisplayNames = {
   'general_doctor': 'Dokter Umum',
   'nurse': 'Perawat',
   'student': 'Mahasiswa',
-  'other': 'Dokter Residen'
+  'other': 'Lainnya'
 };
 serve(async (req)=>{
   console.log(`--- New Request Received: ${req.method} ${req.url} ---`);
@@ -81,45 +81,32 @@ serve(async (req)=>{
     }
     // 1. Fetch Participant Data (including participant_type)
     console.log(`Fetching participant data for ID: ${participantId}...`);
-    const { data: participantData, error: participantError } = await supabaseAdmin
-      .from('participants')
-      .select('full_name, email, participant_type') // Added participant_type
-      .eq('id', participantId)
-      .single();
-
+    const { data: participantData, error: participantError } = await supabaseAdmin.from('participants').select('full_name, email, participant_type') // Added participant_type
+    .eq('id', participantId).single();
     if (participantError) console.error("Participant fetch error:", participantError);
     if (participantData) console.log("Participant data fetched:", participantData);
-
     if (participantError || !participantData) {
       return errorResponse(`Failed to fetch participant: ${participantError?.message || 'Not found'}`, 500);
     }
     const recipientEmail = participantData.email;
     const recipientName = participantData.full_name;
     const participantCategory = participantData.participant_type; // Use participant_type directly
-
     if (!participantCategory) {
       console.error(`Participant ${participantId} is missing participant_type.`);
       return errorResponse(`Participant data incomplete: Missing participant type.`, 500);
     }
     const symposiumTicketName = categoryDisplayNames[participantCategory] || participantCategory;
     console.log(`Determined symposium ticket name: ${symposiumTicketName} from participant_type: ${participantCategory}`);
-
     // 2. Fetch Registration Data (only need registration_number)
     console.log(`Fetching registration data for ID: ${registrationId}...`);
-    const { data: registrationData, error: registrationError } = await supabaseAdmin
-      .from('registrations')
-      .select('registration_number, id') // Only need registration_number now
-      .eq('id', registrationId)
-      .single();
-
+    const { data: registrationData, error: registrationError } = await supabaseAdmin.from('registrations').select('registration_number, id') // Only need registration_number now
+    .eq('id', registrationId).single();
     if (registrationError) console.error("Registration fetch error:", registrationError);
     if (registrationData) console.log("Registration data fetched:", registrationData);
-
     if (registrationError || !registrationData) {
       return errorResponse(`Failed to fetch registration: ${registrationError?.message || 'Not found'}`, 500);
     }
     const registrationNumber = registrationData.registration_number;
-
     // 3. Fetch Associated Workshops
     console.log(`Fetching workshop details for registration number: ${registrationNumber}...`);
     let workshopItemsHtml = '';

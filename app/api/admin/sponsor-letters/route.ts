@@ -16,9 +16,10 @@ export async function GET() {
         registration_number,
         status,
         created_at,
-        sponsor_letter_url
+        sponsor_letter_url,
+        sponsor_letter_path
       `)
-      .not('sponsor_letter_url', 'is', null)
+      .or('sponsor_letter_url.not.is.null,sponsor_letter_path.not.is.null')
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -39,8 +40,12 @@ export async function GET() {
           console.warn(`Error fetching participant for registration ${registration.id}:`, participantError)
         }
 
+        // Use sponsor_letter_path if available, otherwise fallback to sponsor_letter_url
+        const sponsor_letter_url = registration.sponsor_letter_path || registration.sponsor_letter_url
+
         return {
           ...registration,
+          sponsor_letter_url,
           participants: participants || null
         }
       })
