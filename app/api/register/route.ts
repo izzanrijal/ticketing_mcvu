@@ -379,6 +379,7 @@ export async function POST(request: Request) {
           nik: participant.nik || "",
           participant_type: participant.participant_type || "other",
           institution: participant.institution || "",
+          ewaco_interest: participant.ewaco_interest || false, // Add ewaco_interest field
           registration_id: registrationId // Add registration_id directly
         }
         
@@ -499,6 +500,7 @@ export async function POST(request: Request) {
           phone: registrationData.contact_person?.phone || "",
           participant_type: "other",
           institution: "",
+          ewaco_interest: false, // Add ewaco_interest field
           registration_id: registrationId // Add registration_id
         }
         

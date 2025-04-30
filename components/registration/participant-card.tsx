@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { Checkbox } from "@/components/ui/checkbox"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import type { Participant } from "./registration-flow"
 import { Badge } from "@/components/ui/badge"
 
@@ -257,6 +258,46 @@ export function ParticipantCard({ participant, index, ticketId, onUpdate }: Part
             required
           />
         </div>
+
+        {/* EWACO Interest Question - Hidden for certain participant types */}
+        {participantData.participant_type !== 'cardiologist' && 
+         participantData.participant_type !== 'cardiology_resident' && (
+          <div className="space-y-2">
+            <Label htmlFor={`ewaco-interest-${index}`} className="flex flex-col space-y-1">
+              <span>
+                Apakah Peserta Tertarik untuk mengikuti ECG War Championship (EWACO) pada saat acara utama berlangsung?{" "}
+                <span className="text-red-500">*</span>
+              </span>
+              <span className="text-sm font-semibold text-red-500">
+                Dokter spesialis jantung dan residen ilmu jantung dilarang untuk ikut
+              </span>
+            </Label>
+            <RadioGroup
+              name="ewaco_interest"
+              value={typeof participantData.ewaco_interest === 'boolean' ? (participantData.ewaco_interest ? "yes" : "no") : ""}
+              onValueChange={(value) => handleChange({
+                target: {
+                  name: "ewaco_interest",
+                  value: value === "yes" ? true : value === "no" ? false : undefined
+                }
+              } as any)}
+              className="flex flex-col space-y-1"
+              required
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="yes" id={`ewaco-yes-${index}`} />
+                <Label htmlFor={`ewaco-yes-${index}`}>Ya</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="no" id={`ewaco-no-${index}`} />
+                <Label htmlFor={`ewaco-no-${index}`}>Tidak</Label>
+              </div>
+            </RadioGroup>
+            {participantData.ewaco_interest === undefined && (
+              <span className="text-xs text-red-500"></span>
+            )}
+          </div>
+        )}
 
         <Separator />
 
