@@ -153,7 +153,7 @@ export function ParticipantCard({ participant, index, ticketId, onUpdate }: Part
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor={`full-name-${index}`}>
-              Nama Lengkap <span className="text-red-500">*</span>
+              Nama Lengkap Disertai Gelar <span className="text-red-500">*</span>
             </Label>
             <Input
               id={`full-name-${index}`}
@@ -183,7 +183,7 @@ export function ParticipantCard({ participant, index, ticketId, onUpdate }: Part
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor={`phone-${index}`}>
-              Nomor Telepon <span className="text-red-500">*</span>
+              Nomor Telepon (Whatsapp) <span className="text-red-500">*</span>
             </Label>
             <Input
               id={`phone-${index}`}
