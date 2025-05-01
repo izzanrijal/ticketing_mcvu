@@ -8,8 +8,8 @@ import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
 
 export const metadata: Metadata = {
-  title: "Pembayaran - MCVU 2025 Symposium",
-  description: "Instruksi pembayaran untuk MCVU 2025 Symposium",
+  title: "Pembayaran - MCVU XXIII 2025",
+  description: "Instruksi pembayaran untuk MCVU XXIII 2025",
 }
 
 async function getRegistration(id: string) {

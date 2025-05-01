@@ -10,9 +10,13 @@ import "./globals.css"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "MCVU 2025 Symposium",
+  title: "MCVU XXIII 2025",
   description: "Platform Pendaftaran Symposium MCVU 2025",
-    generator: 'v0.dev'
+  generator: 'v0.dev',
+  icons: {
+    icon: '/assets/favicon.png',
+    apple: '/assets/favicon.png'
+  }
 }
 
 export default async function RootLayout({

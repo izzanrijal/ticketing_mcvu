@@ -12,8 +12,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
 
 export const metadata: Metadata = {
-  title: "Detail Peserta - MCVU 2025 Symposium",
-  description: "Informasi peserta dan tiket untuk MCVU 2025 Symposium",
+  title: "Detail Peserta - MCVU XXIII 2025",
+  description: "Informasi peserta dan tiket untuk MCVU XXIII 2025",
 }
 
 async function getRegistrationWithParticipants(id: string) {
@@ -271,7 +271,7 @@ export default async function RegistrationDetailsPage({
           <div className="mx-auto max-w-3xl">
             <div className="mb-8 text-center">
               <h1 className="text-3xl font-bold md:text-4xl">Detail Peserta</h1>
-              <p className="mt-2 text-muted-foreground">Informasi peserta dan tiket untuk MCVU 2025 Symposium</p>
+              <p className="mt-2 text-muted-foreground">Informasi peserta dan tiket untuk MCVU XXIII 2025</p>
             </div>
 
             {registration.hasVerifiedPayment ? (

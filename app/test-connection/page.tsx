@@ -4,7 +4,7 @@ import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
 
 export const metadata: Metadata = {
-  title: "Tes Koneksi Supabase - MCVU 2025 Symposium",
+  title: "Tes Koneksi Supabase - MCVU XXIII 2025",
   description: "Menguji koneksi ke database Supabase",
 }
 

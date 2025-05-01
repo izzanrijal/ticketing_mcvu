@@ -197,7 +197,7 @@ serve(async (req: Request) => {
 
     const emailHtml = `
         <p>Yth. <strong>${participantData.full_name}</strong>,</p>
-        <p>Terima kasih! Pembayaran Anda untuk registrasi The 1st Makassar Vascular Conference Update (MVCU) 2025 (${registrationData.registration_number}) telah kami terima.</p>
+        <p>Terima kasih! Pembayaran Anda untuk registrasi Makassar Cardiovascular Update (MVCU) XXIII Tahun 2025 (${registrationData.registration_number}) telah kami terima.</p>
         <p>Terlampir adalah invoice lunas dan tiket digital Anda yang berisi QR Code untuk check-in di lokasi acara.</p>
         <p>Harap simpan email ini atau unduh lampiran untuk referensi Anda.</p>
         <p>Sampai jumpa di Makassar!</p>

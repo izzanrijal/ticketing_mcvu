@@ -110,7 +110,7 @@ export async function sendRegistrationInvoice(
             .select(`
                 *,
                 participants(*, workshop_registrations(workshop_id)),
-                contact_persons(*),
+                contact_persons!contact_persons_registration_id_fkey(*),
                 tickets(*)
             `)
             .eq('id', registrationId)
@@ -447,9 +447,9 @@ function generateInvoiceHtml(params: GenerateInvoiceParams): string {
                      <td>Kode Unik Pengurang:</td>
                      <td style="padding-left: 15px;">- Rp ${(originalAmount - discountAmount - uniqueAmount).toLocaleString('id-ID')},-</td>
                  </tr>
-                 <tr style="border-top: 1px solid #ddd; font-weight: bold; font-size: 1.1em;">
-                     <td style="padding-top: 8px;">Total Tagihan:</td>
-                     <td style="padding-left: 15px; padding-top: 8px;">Rp ${formatCurrency(uniqueAmount)},-</td>
+                 <tr style="border-top: 1px solid #ddd; font-size: 1.1em;">
+                     <td style="padding-top: 8px; font-weight: bold;">Total Tagihan:</td>
+                     <td style="padding-left: 15px; padding-top: 8px; font-weight: bold;">Rp ${formatCurrency(uniqueAmount)},-</td>
                  </tr>
             </table>
 
@@ -471,7 +471,7 @@ function generateInvoiceHtml(params: GenerateInvoiceParams): string {
             </div>
             
             <p style="margin-top: 20px; font-style: italic; color: #555;">
-                Pembayaran Anda akan diverifikasi secara otomatis dalam 1x24 jam hari kerja setelah transfer (pastikan jumlah sesuai kode unik). Anda akan menerima email konfirmasi beserta tiket elektronik terpisah setelah pembayaran berhasil diverifikasi.
+                Pembayaran Anda akan diverifikasi secara otomatis dalam maksimal 7x24 jam hari kerja setelah transfer (pastikan jumlah sesuai kode unik). Anda akan menerima email konfirmasi beserta tiket elektronik terpisah setelah pembayaran berhasil diverifikasi.
             </p>
         `;
     }
@@ -483,7 +483,7 @@ function generateInvoiceHtml(params: GenerateInvoiceParams): string {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Invoice Pendaftaran MVCU 2025 - ${registrationNumber}</title>
+        <title>Invoice Pendaftaran MVCU XXIII 2025 - ${registrationNumber}</title>
         <style>
             body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; line-height: 1.6; color: #333; background-color: #f4f4f4; margin: 0; padding: 0; }
             .email-wrapper { background-color: #f4f4f4; padding: 20px; }
@@ -515,14 +515,14 @@ function generateInvoiceHtml(params: GenerateInvoiceParams): string {
                 </div>
                 <div style="margin-bottom: 20px;">
                 <p>Yth. <strong>${contactPerson?.name ?? 'Peserta'}</strong>,</p>
-                <p>Terima kasih telah melakukan pendaftaran untuk The 1st Makassar Vascular Conference Update (MVCU) 2025. Berikut adalah detail pendaftaran dan instruksi pembayaran Anda:</p>
+                <p>Terima kasih telah melakukan pendaftaran untuk Makassar Cardiovascular Update (MVCU) XXIII Tahun 2025. Berikut adalah detail pendaftaran dan instruksi pembayaran Anda:</p>
                 <p>Nomor Pendaftaran: <strong>${registrationNumber}</strong></p>
                 <p>Tanggal Pendaftaran: <strong>${registrationCreationTime instanceof Date && !isNaN(registrationCreationTime.getTime()) ? registrationCreationTime.toLocaleDateString('id-ID') : 'N/A'}</strong></p>
                 
                 <h2>Detail Kontak Pendaftar</h2>
-                <p>Nama: ${contactPerson?.name ?? 'N/A'}</p>
-                <p>Email: ${contactPerson?.email ?? 'N/A'}</p>
-                <p>Telepon: ${contactPerson?.phone ?? 'N/A'}</p>
+                <p>Nama: ${contactPerson?.name ?? 'Panitia Registrasi MCVU 2025'}</p>
+                <p>Email: ${contactPerson?.email ?? 'panitia.mcvu@perkimakassar.com'}</p>
+                <p>Telepon: ${contactPerson?.phone ?? '+62-821-9061-5922'}</p>
 
                 <h2>Rincian Pemesanan</h2>
                 ${orderDetailsTableHtml}
@@ -584,11 +584,11 @@ export async function generateInvoicePdf(
     const largeFontSize = 14;
     const lineSpacing = 14; // Base spacing between lines
     const sectionSpacing = 20; // Space between major sections
-    const tableHeaderFontSize = 9;
-    const tableCellFontSize = 9;
     const grayColor = rgb(0.3, 0.3, 0.3);
     const lightGrayColor = rgb(0.9, 0.9, 0.9);
     const tableBorderColor = rgb(0.8, 0.8, 0.8);
+    const tableHeaderFontSize = 9;
+    const tableCellFontSize = 9;
 
     let yPosition = height - topMargin;
 
@@ -636,18 +636,40 @@ export async function generateInvoicePdf(
     };
 
     // --- Header Section ---
-    // Logo Placeholder (Top Left)
-    const logoHeight = 40;
+    // Logo with correct aspect ratio
     const logoWidth = 120;
-    page.drawRectangle({ 
-        x: leftMargin, 
-        y: yPosition - logoHeight, 
-        width: logoWidth, 
-        height: logoHeight, 
-        borderColor: lightGrayColor, 
-        borderWidth: 1 
-    });
-    drawText('Logo', leftMargin + logoWidth / 2, yPosition - logoHeight / 2 - 6, defaultFontSize, false, rgb(0.6, 0.6, 0.6), 'center');
+    const logoHeight = 44; // Maintains 500:185 aspect ratio
+    
+    // Load and draw the logo image from local assets
+    const fs = require('fs');
+    const path = require('path');
+    // Get the absolute path to the project root using process.cwd()
+    const projectRoot = process.cwd();
+    const logoPath = path.join(projectRoot, 'public', 'assets', 'logo_invoice.png'); // Corrected filename
+    
+    try {
+        console.log(`Attempting to load logo from: ${logoPath}`); // Add log to verify path
+        const logoImageBytes = fs.readFileSync(logoPath);
+        const logoImage = await pdfDoc.embedPng(logoImageBytes);
+        page.drawImage(logoImage, {
+            x: leftMargin,
+            y: yPosition - logoHeight,
+            width: logoWidth,
+            height: logoHeight
+        });
+    } catch (error) {
+        console.error('Error loading logo:', error);
+        console.error('Attempted path:', logoPath);
+        // Draw a placeholder if logo fails to load
+        page.drawRectangle({
+            x: leftMargin,
+            y: yPosition - logoHeight,
+            width: logoWidth,
+            height: logoHeight,
+            borderColor: rgb(0.8, 0.8, 0.8),
+            borderWidth: 1
+        });
+    }
 
     // Invoice Title (Top Right)
     drawText('INVOICE', width - rightMargin, yPosition - 10, largeFontSize, true, grayColor, 'right');
@@ -804,7 +826,7 @@ export async function generateInvoicePdf(
         drawText(`- Rp ${formatCurrency(discountAmount)}`, totalValueX, totalY + lineSpacing, defaultFontSize, false, grayColor, 'right');
 
         totalY = moveYDown(drawText('Kode Unik Pengurang:', totalLabelX, totalY, defaultFontSize, false), lineSpacing);
-        const actualUniqueDeduction = (originalAmount - discountAmount) - uniqueAmount; // Calculate actual deduction
+        const actualUniqueDeduction = (originalAmount - discountAmount - uniqueAmount); // Calculate actual deduction
         const displayDeduction = Math.abs(actualUniqueDeduction) < 0.01 ? 0 : actualUniqueDeduction;
         drawText(`- Rp ${formatCurrency(displayDeduction)}`, totalValueX, totalY + lineSpacing, defaultFontSize, false, grayColor, 'right');
 
@@ -812,7 +834,7 @@ export async function generateInvoicePdf(
         page.drawLine({ start: { x: totalLabelX - 10, y: totalY }, end: { x: width - rightMargin, y: totalY }, thickness: 1, color: grayColor });
         totalY = moveYDown(totalY, lineSpacing * 0.7); // Space after line
 
-        drawText('Total Tagihan:', totalLabelX, totalY, defaultFontSize, true, grayColor, 'right');
+        drawText('Total Tagihan:', totalLabelX, totalY, defaultFontSize, true, grayColor, 'left');
         drawText(`Rp ${formatCurrency(uniqueAmount)}`, totalValueX, totalY, defaultFontSize, true, grayColor, 'right');
         yPosition = moveYDown(totalY, sectionSpacing); // Move main Y down past totals
     } else {

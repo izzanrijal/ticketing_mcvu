@@ -21,7 +21,7 @@ export default function Home() {
               <div className="flex flex-col justify-center space-y-4">
                 <div className="space-y-2">
                   <h1 className="text-3xl font-bold tracking-tighter text-primary sm:text-4xl md:text-5xl lg:text-6xl/none">
-                    MCVU Symposium 2025
+                    MCVU XXIII 2025  
                   </h1>
                   <p className="text-xl text-muted-foreground md:text-2xl">
                     Interconnected Health: Membangun Masa Depan Kesehatan Indonesia
@@ -54,7 +54,7 @@ export default function Home() {
                 <div className="relative h-[300px] w-[300px] sm:h-[350px] sm:w-[350px] md:h-[400px] md:w-[400px] lg:h-[450px] lg:w-[450px]">
                   <Image
                     src="/medical-symposium-gathering.png"
-                    alt="MCVU Symposium 2025"
+                    alt="MCVU (Makassar Cardiovascular Update) XXIII 2025"
                     fill
                     className="object-cover rounded-xl"
                     priority
@@ -71,7 +71,7 @@ export default function Home() {
             <div className="mx-auto flex max-w-[58rem] flex-col items-center justify-center gap-4 text-center">
               <h2 className="text-3xl font-bold leading-[1.1] text-primary sm:text-3xl md:text-5xl">Tentang Acara</h2>
               <p className="max-w-[85%] leading-normal text-muted-foreground sm:text-lg sm:leading-7">
-                MCVU Symposium 2025 adalah acara tahunan yang menghubungkan profesional kesehatan dari seluruh Indonesia
+                MCVU (Makassar Cardiovascular Update) XXIII 2025 adalah acara tahunan yang menghubungkan profesional kesehatan dari seluruh Indonesia
                 untuk berbagi pengetahuan, pengalaman, dan inovasi terbaru dalam dunia medis.
               </p>
             </div>

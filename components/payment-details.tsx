@@ -27,9 +27,9 @@ export function PaymentDetails({ registration }: PaymentDetailsProps) {
 
   // Get bank details from event_config
   const bankDetails = {
-    bank_name: "Bank Mandiri",
-    account_number: "1234567890",
-    account_name: "MCVU Symposium 2025",
+    bank_name: "Bank BTN",
+    account_number: "0077-01-50-01-50-014607-6",
+    account_name: "PERKI CABANG MAKASSAR",
   }
 
   // Format expiry time (24 hours from now) with null check

@@ -6,8 +6,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
 
 export const metadata: Metadata = {
-  title: "Admin Login - MCVU 2025 Symposium",
-  description: "Login admin untuk MCVU 2025 Symposium",
+  title: "Admin Login - MCVU XXIII 2025",
+  description: "Login admin untuk MCVU XXIII 2025",
 }
 
 export default async function AdminLoginPage({
@@ -61,7 +61,7 @@ export default async function AdminLoginPage({
       <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
         <div className="flex flex-col space-y-2 text-center">
           <h1 className="text-2xl font-semibold tracking-tight text-primary">Admin Login</h1>
-          <p className="text-sm text-muted-foreground">Masuk ke dashboard admin MCVU 2025 Symposium</p>
+          <p className="text-sm text-muted-foreground">Masuk ke dashboard admin MCVU XXIII 2025</p>
         </div>
 
         {errorMessage && (

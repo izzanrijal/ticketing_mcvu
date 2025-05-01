@@ -254,7 +254,7 @@ export function RegistrationForm() {
     <Card>
       <CardHeader>
         <CardTitle>Formulir Pendaftaran</CardTitle>
-        <CardDescription>Lengkapi informasi di bawah ini untuk mendaftar MCVU Symposium 2025</CardDescription>
+        <CardDescription>Lengkapi informasi di bawah ini untuk mendaftar sebagai peserta Symposium maupun Workshop MCVU XXIII 2025</CardDescription>
       </CardHeader>
       <CardContent>
         <Form {...form}>
