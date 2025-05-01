@@ -269,7 +269,7 @@ export function ParticipantCard({ participant, index, ticketId, onUpdate }: Part
                 <span className="text-red-500">*</span>
               </span>
               <span className="text-sm font-semibold text-red-500">
-                Dokter spesialis jantung dan residen ilmu jantung dilarang untuk ikut
+                Dokter spesialis dan residen ilmu jantung dilarang untuk ikut
               </span>
             </Label>
             <RadioGroup
