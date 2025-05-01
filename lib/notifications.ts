@@ -843,7 +843,7 @@ export async function generateInvoicePdf(
     yPosition = moveYDown(yPosition, lineSpacing * 0.7);
     if (paymentType !== 'sponsor') { 
         yPosition = moveYDown(drawText('- Pastikan jumlah transfer sesuai hingga digit terakhir untuk verifikasi otomatis.', leftMargin + 10, yPosition, smallFontSize), lineSpacing * 0.7);
-        yPosition = moveYDown(drawText('- Pembayaran diverifikasi dalam 1x24 jam hari kerja.', leftMargin + 10, yPosition, smallFontSize), lineSpacing * 0.7);
+        yPosition = moveYDown(drawText('- Pembayaran diverifikasi dalam 7x24 jam hari kerja.', leftMargin + 10, yPosition, smallFontSize), lineSpacing * 0.7);
         yPosition = moveYDown(drawText('- Anda akan menerima email konfirmasi & tiket elektronik setelah pembayaran berhasil diverifikasi.', leftMargin + 10, yPosition, smallFontSize), lineSpacing * 0.7);
     } else {
         yPosition = moveYDown(drawText('- Konfirmasi pendaftaran akan dikirim setelah sponsor melakukan pembayaran.', leftMargin + 10, yPosition, smallFontSize), lineSpacing * 0.7);

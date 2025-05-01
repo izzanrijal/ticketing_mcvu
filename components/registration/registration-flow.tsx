@@ -629,7 +629,7 @@ const PaymentSummary = ({
     async function fetchData() {
       try {
         // Fetch workshops
-        const { data: workshopsData } = await supabase.from("workshops").select("*")
+        const { data: workshopsData } = await supabase.from("workshops").select("*").order('sort_order', { ascending: true })
 
         setWorkshops(workshopsData || [])
 

@@ -428,7 +428,7 @@ export function PaymentInstructions({ registrationId }: PaymentInstructionsProps
                   <li>Sertakan nomor registrasi pada keterangan transfer</li>
                   <li>Simpan bukti pembayaran</li>
                   <li>
-                    Pembayaran akan diverifikasi dalam waktu 1x24 jam (hari kerja). Jika dalam 24 jam belum
+                    Pembayaran akan diverifikasi dalam waktu 7x24 jam (hari kerja). Jika dalam 24 jam belum
                     terverifikasi, silakan hubungi panitia.
                   </li>
                 </ol>

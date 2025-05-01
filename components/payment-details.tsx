@@ -201,7 +201,7 @@ export function PaymentDetails({ registration }: PaymentDetailsProps) {
         <CardFooter className="flex flex-col gap-4">
           <p className="text-sm text-muted-foreground">
             Setelah melakukan pembayaran, sistem akan secara otomatis memverifikasi pembayaran Anda. Proses ini dapat
-            memakan waktu hingga 1x24 jam.
+            memakan waktu hingga 7x24 jam.
           </p>
           <Button className="w-full" asChild>
             <a href="/">Kembali ke Beranda</a>
