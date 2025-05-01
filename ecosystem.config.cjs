@@ -8,7 +8,7 @@ module.exports = {
       exec_mode: "cluster",
       watch: false,
       env: {
-        PORT: 3000,
+        PORT: 3008,
         NODE_ENV: "production",
         NEXT_PUBLIC_APP_URL: "https://mcvu.perkimakassar.com"
       },
