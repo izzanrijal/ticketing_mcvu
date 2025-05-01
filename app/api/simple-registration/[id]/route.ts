@@ -1,11 +1,11 @@
-import { createClient } from "@/lib/supabase"
+import { supabaseAdmin } from "@/lib/supabase"
 import { type NextRequest, NextResponse } from "next/server"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   const id = params.id
 
   // Create a Supabase client
-  const supabase = createClient()
+  const supabase = supabaseAdmin
 
   try {
     // Special handling for the problematic ID

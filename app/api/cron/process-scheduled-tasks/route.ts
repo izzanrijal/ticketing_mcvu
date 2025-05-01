@@ -4,45 +4,32 @@
  */
 
 import { type NextRequest, NextResponse } from "next/server"
+import { supabaseAdmin } from "@/lib/supabase"
 import { processScheduledPaymentChecks } from "@/lib/payment-check-scheduler"
-import { createClient } from "@/lib/supabase"
 
 // Create Supabase client
-const supabase = createClient()
+const supabase = supabaseAdmin
 
 export async function GET(req: NextRequest) {
   try {
-    // Verify API key for security (should be set in environment variables)
-    const apiKey = req.headers.get("x-api-key")
+    // Verify authorization token
+    const authHeader = req.headers.get("authorization")
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return new NextResponse("Unauthorized", { status: 401 })
+    }
 
-    if (apiKey !== process.env.CRON_API_KEY) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const token = authHeader.split(" ")[1]
+    if (token !== process.env.CRON_SECRET) {
+      return new NextResponse("Invalid token", { status: 401 })
     }
 
     // Process scheduled payment checks
-    const result = await processScheduledPaymentChecks()
+    await processScheduledPaymentChecks()
 
-    // Log the cron job execution
-    await supabase.from("cron_logs").insert({
-      job_name: "process_scheduled_tasks",
-      result: result,
-    })
-
-    return NextResponse.json({
-      success: true,
-      result,
-    })
-  } catch (error) {
-    console.error("Error in scheduled tasks processing cron job:", error)
-
-    // Log the error
-    await supabase.from("error_logs").insert({
-      source: "scheduled_tasks_processing_cron",
-      message: `Error in cron job: ${error.message}`,
-      stack: error.stack,
-      level: "error",
-    })
-
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    const error = err as Error
+    console.error("Error processing scheduled tasks:", error.message)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

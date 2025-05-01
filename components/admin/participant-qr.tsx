@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { Download, Copy } from "lucide-react"
-import QRCode from "qrcode.react"
+import { QRCodeSVG } from "qrcode.react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -118,7 +118,7 @@ export function ParticipantQr({ registrationItemId }: ParticipantQrProps) {
       <CardContent>
         <div className="flex flex-col items-center space-y-4">
           <div className="rounded-md bg-white p-4">
-            <QRCode id="participant-qr-code" value={qrData} size={200} level="H" includeMargin renderAs="canvas" />
+            <QRCodeSVG id="participant-qr-code" value={qrData} size={200} level="H" includeMargin />
           </div>
           <div className="text-center">
             <h3 className="font-medium">{participant.participant.full_name}</h3>

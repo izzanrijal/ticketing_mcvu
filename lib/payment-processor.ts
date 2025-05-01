@@ -137,6 +137,39 @@ export async function processMutation(mutation: MootaMutation) {
   }
 }
 
+// Process recent mutations from Moota
+export async function processRecentMutations() {
+  try {
+    const mutations = await fetchMutations()
+    for (const mutation of mutations) {
+      await processMutation(mutation)
+    }
+  } catch (error) {
+    console.error("Error processing recent mutations:", error)
+    throw error
+  }
+}
+
+// Process pending payments
+export async function processPendingPayments() {
+  try {
+    const { data: pendingRegistrations, error } = await supabase
+      .from("registrations")
+      .select("id")
+      .eq("status", "pending")
+      .lt("check_attempts", MAX_CHECK_ATTEMPTS)
+
+    if (error) throw error
+
+    for (const registration of pendingRegistrations) {
+      await checkPaymentForRegistration(registration.id)
+    }
+  } catch (error) {
+    console.error("Error processing pending payments:", error)
+    throw error
+  }
+}
+
 // Check payment for a specific registration
 export async function checkPaymentForRegistration(registrationId: string) {
   try {

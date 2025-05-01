@@ -5,39 +5,50 @@
 
 import { type NextRequest, NextResponse } from "next/server"
 import { verifyWebhookSignature, type MootaWebhookPayload } from "@/lib/moota-api"
-import { processMutation } from "@/lib/payment-processor"
-import { createClient } from "@/lib/supabase"
+import { processRecentMutations } from "@/lib/payment-processor"
+import { supabaseAdmin } from "@/lib/supabase"
 
 // Create Supabase client
-const supabase = createClient()
+const supabase = supabaseAdmin
 
 export async function POST(req: NextRequest) {
   try {
+    // Verify webhook secret
+    const secret = req.headers.get("x-webhook-secret")
+    if (secret !== process.env.MOOTA_WEBHOOK_SECRET) {
+      return NextResponse.json({ error: "Invalid webhook secret" }, { status: 401 })
+    }
+
     // Get the request body as text for signature verification
     const bodyText = await req.text()
     let body: MootaWebhookPayload
 
     try {
       body = JSON.parse(bodyText)
-    } catch (e) {
+    } catch (err) {
+      const error = err as Error
+      console.error("Error parsing webhook payload:", error.message)
       return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 })
     }
 
-    // Get the signature from headers
-    const signature = req.headers.get("X-Moota-Signature") || ""
+    // Verify webhook signature
+    const signature = req.headers.get("x-webhook-signature")
+    if (!signature) {
+      return NextResponse.json({ error: "Missing signature" }, { status: 401 })
+    }
 
-    // Verify the signature
-    const isValid = verifyWebhookSignature(signature, bodyText)
+    const isValid = verifyWebhookSignature(bodyText, signature)
+    if (!isValid) {
+      return NextResponse.json({ error: "Invalid signature" }, { status: 401 })
+    }
 
-    // Log the webhook
+    // Log webhook
     const { data: webhookLog, error: logError } = await supabase
       .from("webhook_logs")
       .insert({
         source: "moota",
-        event_type: body.type === "CR" ? "credit" : "debit",
         payload: body,
-        headers: Object.fromEntries(req.headers.entries()),
-        signature_valid: isValid,
+        signature,
       })
       .select()
       .single()
@@ -46,63 +57,24 @@ export async function POST(req: NextRequest) {
       console.error("Error logging webhook:", logError)
     }
 
-    // If signature is invalid, return error
-    if (!isValid) {
-      return NextResponse.json({ error: "Invalid signature" }, { status: 401 })
-    }
-
-    // Skip outgoing transactions (DB = Debit)
-    if (body.type === "DB") {
-      return NextResponse.json({
-        success: true,
-        message: "Skipped outgoing transaction",
-      })
-    }
-
-    // Process the mutation
-    const result = await processMutation({
-      bank_id: body.bank_id,
-      account_number: body.account_number,
-      bank_type: body.bank_type,
-      date: body.date,
-      amount: body.amount,
-      description: body.description,
-      type: body.type,
-      balance: body.balance,
-      created_at: body.created_at,
-      updated_at: body.updated_at,
-      mutation_id: body.mutation_id,
-      token: body.token,
-      attachment: body.attachment,
-      note: body.note,
-    })
+    // Process the webhook payload
+    await processRecentMutations()
 
     // Update webhook log with processing result
     if (webhookLog) {
       await supabase
         .from("webhook_logs")
         .update({
-          processing_result: result,
+          processing_result: "success",
           processed_at: new Date().toISOString(),
         })
         .eq("id", webhookLog.id)
     }
 
-    return NextResponse.json({
-      success: true,
-      result,
-    })
-  } catch (error) {
-    console.error("Error processing Moota webhook:", error)
-
-    // Log the error
-    await supabase.from("error_logs").insert({
-      source: "moota_webhook",
-      message: `Error processing webhook: ${error.message}`,
-      stack: error.stack,
-      level: "error",
-    })
-
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    const error = err as Error
+    console.error("Error processing Moota webhook:", error.message)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

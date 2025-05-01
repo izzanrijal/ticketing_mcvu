@@ -62,3 +62,7 @@ export function AdminDashboardLayout({ children, user, activeTab: initialActiveT
     </div>
   )
 }
+
+export function DashboardLayout({ children }: AdminDashboardLayoutProps) {
+  return <AdminDashboardLayout children={children} user={null} />
+}
