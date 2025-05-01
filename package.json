@@ -14,7 +14,7 @@
     "pm2:delete": "pm2 delete ecosystem.config.cjs",
     "pm2:logs": "pm2 logs",
     "pm2:status": "pm2 status",
-    "postpull": "npm install && npm run build && npm run pm2:restart"
+    "postpull": "npm install --legacy-peer-deps && npm run build && npm run pm2:restart"
   },
   "dependencies": {
     "@hookform/resolvers": "latest",
