@@ -39,14 +39,34 @@ export async function GET(
     console.log(`[Server] Supabase client initialized successfully.`);
     console.log(`[Server] Fetching registration details for ID: ${registrationId}`);
 
-    // Fetch registration data with related tables
+    // Modified query to avoid relationship ambiguity between registrations and contact_persons
     const { data, error } = await supabaseAdmin
       .from('registrations')
       .select(`
-        *,\n        participants(*),\n        tickets(*),\n        contact_persons(*),\n        payments(*)
+        *,
+        participants(*),
+        tickets(*),
+        payments(*)
       `)
       .eq('id', registrationId)
       .maybeSingle();
+
+    // If the above query succeeded, fetch contact_persons separately
+    if (!error && data) {
+      const { data: contactPersonsData, error: contactPersonsError } = await supabaseAdmin
+        .from('contact_persons')
+        .select('*')
+        .eq('registration_id', registrationId);
+
+      if (!contactPersonsError) {
+        // Add contact_persons to the data object
+        data.contact_persons = contactPersonsData;
+      } else {
+        console.warn('[Server] Error fetching contact_persons:', contactPersonsError);
+        // Continue even if contact_persons fetch fails
+        data.contact_persons = [];
+      }
+    }
 
     if (error) {
       console.error('[Server] Supabase query error:', JSON.stringify(error, null, 2));
@@ -64,11 +84,23 @@ export async function GET(
 
     if (!data) {
       console.log(`[Server] No data found for registration ID: ${registrationId}`);
-      // Kembalikan 404 jika tidak ditemukan
-      return NextResponse.json(
-        { error: 'Registration not found' },
-        { status: 404 }
-      );
+      
+      // Create fallback data for UI instead of returning 404
+      const fallbackData = {
+        id: registrationId,
+        registration_number: "NOT_FOUND",
+        status: "unknown",
+        participants: [],
+        tickets: [],
+        contact_persons: [],
+        payments: []
+      };
+      
+      return NextResponse.json({ 
+        data: fallbackData,
+        status: 'fallback',
+        error: 'Registration not found, using fallback data' 
+      });
     }
 
     console.log('[Server] Successfully retrieved registration data');
