@@ -346,21 +346,21 @@ export function PaymentInstructions({ registrationId }: PaymentInstructionsProps
                 <div className="rounded-md border p-4 space-y-4">
                   <div className="grid grid-cols-2 gap-2">
                     <div className="text-sm font-medium">Bank</div>
-                    <div>Bank Mandiri</div>
+                    <div>Bank BTN</div>
                     <div className="text-sm font-medium">Nomor Rekening</div>
                     <div className="flex items-center">
-                      1234567890
+                      0077-01-50-014607-6
                       <Button
                         variant="ghost"
                         size="icon"
                         className="ml-2 h-6 w-6"
-                        onClick={() => copyToClipboard("1234567890")}
+                        onClick={() => copyToClipboard("0077-01-50-014607-6")}
                       >
                         {copied ? <CheckCircle className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
                       </Button>
                     </div>
                     <div className="text-sm font-medium">Atas Nama</div>
-                    <div>MCVU 2025</div>
+                    <div>PERKI CABANG MAKASSAR</div>
                     <div className="text-sm font-medium">Jumlah Transfer</div>
                     <div className="flex items-center font-bold">
                       Rp {paymentAmount.toLocaleString("id-ID")}
