@@ -37,6 +37,7 @@ interface ParticipantData {
   nik: string | null;
   qr_code_id: string | null;
   payment_note: string | null; // Note from payments table
+  ewaco_interest: boolean | null; // Added ewaco interest
 }
 
 // Define participant type mapping for display
@@ -162,7 +163,8 @@ export function AdminParticipants() {
       "Kategori Peserta", // New header
       "Status Registrasi",
       "Catatan Pembayaran", // Added notes header
-      "Tanggal Registrasi" // Add registration date if needed
+      "Tanggal Registrasi", // Add registration date if needed
+      "Minat Ewaco" // Added ewaco interest header
     ];
 
     // Map participants data from the view
@@ -177,7 +179,8 @@ export function AdminParticipants() {
       p.participant_type ? (participantTypeMap[p.participant_type] || p.participant_type) : '-', // New data
       p.registration_status ?? 'N/A',
       p.payment_note ?? '-', // Use payment_note
-      p.registration_date ? new Date(p.registration_date).toLocaleDateString('id-ID') : 'N/A' // Format date
+      p.registration_date ? new Date(p.registration_date).toLocaleDateString('id-ID') : 'N/A', // Format date
+      p.ewaco_interest === true ? 'Ya' : p.ewaco_interest === false ? 'Tidak' : '-' // Added ewaco interest data
     ]);
 
     // Create worksheet
@@ -501,6 +504,7 @@ export function AdminParticipants() {
               <TableHead>Kategori Peserta</TableHead>
               <TableHead>Status Registrasi</TableHead>
               <TableHead>Catatan Pembayaran</TableHead>
+              <TableHead>Minat EWaCO</TableHead> {/* Added EWaCO Header */}
               <TableHead className="text-right">Aksi</TableHead>
             </TableRow>
           </TableHeader>
@@ -508,12 +512,12 @@ export function AdminParticipants() {
             {loading ? (
               [...Array(5)].map((_, i) => (
                 <TableRow key={i}>
-                  <TableCell colSpan={11} className="h-12 animate-pulse bg-muted"></TableCell>
+                  <TableCell colSpan={12} className="h-12 animate-pulse bg-muted"></TableCell> {/* Updated colspan */} 
                 </TableRow>
               ))
             ) : participants.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={11} className="h-24 text-center">
+                <TableCell colSpan={12} className="h-24 text-center"> {/* Updated colspan */} 
                   Tidak ada data peserta
                 </TableCell>
               </TableRow>
@@ -541,6 +545,7 @@ export function AdminParticipants() {
                     <TableCell>{p.participant_type ? (participantTypeMap[p.participant_type] || p.participant_type) : '-'}</TableCell>
                     <TableCell><Badge variant={badgeVariant === 'success' ? 'default' : badgeVariant}>{p.registration_status ?? 'N/A'}</Badge></TableCell>
                     <TableCell>{p.payment_note ?? '-'}</TableCell>
+                    <TableCell>{p.ewaco_interest === true ? 'Ya' : p.ewaco_interest === false ? 'Tidak' : '-'}</TableCell> {/* Added EWaCO Data */}
                     <TableCell className="text-right">
                       {(() => {
                         if (p.registration_status === 'paid') {
