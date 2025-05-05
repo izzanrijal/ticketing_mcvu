@@ -82,6 +82,45 @@ async function generateAndStoreQRCodeImage(qrCodeId: string, participantId: stri
   }
 }
 
+// Helper function to generate unique final amount
+async function generateUniqueFinalAmount(
+  baseAmount: number,
+  maxAttempts = 10
+): Promise<number> {
+  let finalAmount = baseAmount
+  let attempts = 0
+
+  while (attempts < maxAttempts) {
+    // Check if the current finalAmount exists
+    const { count, error } = await supabaseAdmin
+      .from("registrations")
+      .select("id", { count: "exact", head: true })
+      .eq("final_amount", finalAmount)
+
+    if (error) {
+      console.error("Error checking final amount uniqueness:", error)
+      // Decide how to handle the error, maybe throw or return baseAmount
+      throw new Error("Could not verify final amount uniqueness")
+    }
+
+    if (count === 0) {
+      // Amount is unique, return it
+      return finalAmount
+    }
+
+    // Amount exists, generate a unique addition (1-499)
+    const uniqueAddition = Math.floor(Math.random() * 499) + 1
+    finalAmount = baseAmount + uniqueAddition
+    attempts++
+
+    console.log(`Attempt ${attempts}: Generated new final amount ${finalAmount}`)
+  }
+
+  // If max attempts reached, throw an error or handle as needed
+  console.error("Max attempts reached for generating unique final amount.")
+  throw new Error("Could not generate a unique final amount after multiple attempts")
+}
+
 export async function POST(request: Request) {
   try {
     // Gunakan supabaseAdmin yang sudah dikonfigurasi dengan service role key
@@ -230,49 +269,8 @@ export async function POST(request: Request) {
       }
     }
 
-    // Generate a unique payment identifier by ADDING a random value (1-999) to the total
-    // This ensures the amount is unique and can be easily identified in bank transactions
-    // We'll check for collisions to make sure we don't generate the same unique amount for different registrations
-
-    let isUniqueAmountAvailable = false
-    let attempts = 0
-    const maxAttempts = 50 // Limit attempts to prevent infinite loop
-    
-    // Random unique code to add to the total amount
-    let uniqueCode = 0
-
-    while (!isUniqueAmountAvailable && attempts < maxAttempts) {
-      // Generate a random addition between 1 and 999 (small amount to add to the total)
-      uniqueCode = Math.floor(Math.random() * 999) + 1
-
-      // Calculate the unique final amount by ADDING the unique code
-      const uniqueFinalAmount = finalAmount + uniqueCode
-
-      // Check if this unique amount is already used in the database
-      const { data: existingPayments, error: checkError } = await supabase
-        .from("payments")
-        .select("id")
-        .eq("amount", uniqueFinalAmount)
-        .limit(1)
-
-      if (!checkError && (!existingPayments || existingPayments.length === 0)) {
-        isUniqueAmountAvailable = true
-      }
-
-      attempts++
-    }
-
-    if (!isUniqueAmountAvailable) {
-      console.error("Could not generate a unique payment amount after", maxAttempts, "attempts")
-      return NextResponse.json(
-        { error: "Failed to generate a unique payment amount. Please try again." },
-        { status: 500 },
-      )
-    }
-
-    console.log(
-      `Generated unique payment amount: ${finalAmount + uniqueCode} (original: ${finalAmount}, unique code: +${uniqueCode})`
-    )
+    // Generate unique final amount
+    finalAmount = await generateUniqueFinalAmount(finalAmount)
 
     // Periksa skema tabel registrations untuk mengetahui kolom yang tersedia
     let registrationColumns = null
@@ -298,17 +296,16 @@ export async function POST(request: Request) {
     // Selalu tambahkan total_amount (sebelum deduction) dan final_amount (setelah deduction)
     const registrationData1 = {
       ...registrationBase,
-      total_amount: finalAmount,     // Total cost before unique code
+      total_amount: verifiedTotalAmount,     // Total cost before discount/unique addition
       discount_amount: discountAmount,
-      final_amount: finalAmount + uniqueCode, // Amount to be paid after adding unique code
-      unique_code: uniqueCode,       // Store the unique code in the registration
+      final_amount: finalAmount, // Use the unique final amount
     }
 
     // Cek dan tambahkan kolom notes jika ada
     if (registrationColumns && Object.keys(registrationColumns).includes("notes")) {
       (registrationData1 as any)["notes"] = appliedPromoCode
-        ? `Promo: ${appliedPromoCode}, Unique Code: +${uniqueCode}`
-        : `Unique Code: +${uniqueCode}`
+        ? `Promo: ${appliedPromoCode}, Unique Code: +${finalAmount - verifiedTotalAmount}`
+        : `Unique Code: +${finalAmount - verifiedTotalAmount}`
     }
 
     console.log("Final registration data before insert:", registrationData1)
@@ -540,7 +537,7 @@ export async function POST(request: Request) {
       // Prepare arguments for the function call based on its definition
       const originalAmount = registrationData.totalAmount ?? 0;
       const discountAmount = registrationData.discount_amount ?? 0; // Assuming discount_amount is available or default to 0
-      const uniqueAmount = finalAmount + uniqueCode;
+      const uniqueAmount = finalAmount;
       const uniqueAddition = uniqueAmount - originalAmount;
       const paymentType = "bank_transfer"; // Assuming bank transfer for now
       const originalParticipantsData = registrationData.participants ?? [];
@@ -567,13 +564,13 @@ export async function POST(request: Request) {
     // Prepare payment data
     const paymentData = {
       status: "pending",
-      amount: finalAmount + uniqueCode,
+      amount: finalAmount,
       payment_method: registrationData.payment_type === "sponsor" ? "sponsor" : "bank_transfer",
       registration_id: registrationId,
       notes:
         registrationData.payment_type === "sponsor"
           ? "Pembayaran sponsor"
-          : `Pembayaran mandiri (Unique Code: +${uniqueCode})`
+          : `Pembayaran mandiri (Unique Code: +${finalAmount - verifiedTotalAmount})`
       // check_attempts column has a default value of 0 in the database
     }
     
@@ -645,9 +642,9 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       registrationId: registrationId, // Ensure we return the correct ID
-      uniqueAddition: uniqueCode,
-      uniqueAmount: finalAmount + uniqueCode,
-      originalAmount: finalAmount,
+      uniqueAddition: finalAmount - verifiedTotalAmount,
+      uniqueAmount: finalAmount,
+      originalAmount: verifiedTotalAmount,
     })
   } catch (error) {
     console.error("Server error:", error)
