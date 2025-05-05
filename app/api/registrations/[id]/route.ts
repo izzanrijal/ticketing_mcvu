@@ -7,7 +7,9 @@ export async function GET(
 ) {
   console.log('[Server] /api/registrations/[id] received request'); // Early log
 
-  const registrationId = params.id;
+  // Fix: Access params.id after awaiting it
+  const { id: registrationId } = await params;
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY; // Pastikan ini ada di .env.local
 
@@ -44,6 +46,7 @@ export async function GET(
       .from('registrations')
       .select(`
         *,
+        order_details,
         participants(*),
         tickets(*),
         payments(*)

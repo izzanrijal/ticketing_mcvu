@@ -386,25 +386,138 @@ export function AdminParticipants() {
           const registrationDetails = jsonResponse.data;
           console.log('Fetched registration details:', registrationDetails);
 
-          // Ensure tickets is an array before mapping
-          const ticket = Array.isArray(registrationDetails.tickets) 
-            ? registrationDetails.tickets 
-            : registrationDetails.tickets 
-              ? [registrationDetails.tickets] 
-              : [];
+          // Prepare structure for order details to be displayed
+          let displayOrderDetails: { 
+            registrationNumber: string | null;
+            participants: string[];
+            items: { name: string; price: number }[];
+            totalAmount: number;
+          } | null = null;
 
-          // Prepare order details for display
-          const orderDetails = {
-            registrationNumber: registrationDetails.registration_number,
-            participants: registrationDetails.participants?.[0] ? [registrationDetails.participants[0].full_name] : [],
-            items: ticket.map((item: any) => ({
-              name: item.name,
-              price: item.price,
-            })),
-            totalAmount: registrationDetails.payments?.[0] ? registrationDetails.payments[0].amount : 0,
-          };
+          // Get participant names from the main participants array
+          const participantsArray = Array.isArray(registrationDetails.participants)
+            ? registrationDetails.participants
+            : [];
+          const participantNames = participantsArray.map((p: any) => p.full_name || 'Unknown Name');
 
-          setOrderDetails(orderDetails);
+          // --- Use order_details if available --- 
+          if (registrationDetails.order_details && Array.isArray(registrationDetails.order_details.participants)) {
+            console.log('Using order_details from API:', registrationDetails.order_details);
+            const itemsList: { name: string; price: number }[] = [];
+            const workshopIdsToFetch = new Set<string>();
+            
+            // Pre-scan to identify workshops without names
+            registrationDetails.order_details.participants.forEach((participant: { items: any[] }) => {
+              if (Array.isArray(participant.items)) {
+                participant.items.forEach((item: { type: string; name: string; id: string }) => {
+                  if (item.type === 'workshop' && !item.name && item.id) {
+                    workshopIdsToFetch.add(item.id);
+                  }
+                });
+              }
+            });
+
+            // If we have workshop IDs missing names, fetch them
+            let workshopTitles: Record<string, string> = {};
+            if (workshopIdsToFetch.size > 0) {
+              try {
+                const { data: workshopsData } = await supabase
+                  .from('workshops')
+                  .select('id, title')
+                  .in('id', Array.from(workshopIdsToFetch));
+                
+                // Create a map of ID -> title
+                if (workshopsData) {
+                  workshopsData.forEach((workshop: any) => {
+                    workshopTitles[workshop.id] = workshop.title;
+                  });
+                }
+              } catch (err) {
+                console.error("Error fetching workshop titles:", err);
+              }
+            }
+
+            // Now process all items with workshop names available
+            registrationDetails.order_details.participants.forEach((participantDetail: { items: any[] }) => {
+              if (Array.isArray(participantDetail.items)) {
+                participantDetail.items.forEach((item: { type: string; name: string; id: string; amount: number }) => {
+                  if (typeof item.amount === 'number') {
+                    let itemName = item.name;
+                    
+                    // If name is missing but we have type and id
+                    if (!itemName && item.type && item.id) {
+                      if (item.type === 'workshop') {
+                        // Use the title we fetched from the database
+                        itemName = workshopTitles[item.id] || `Workshop ID: ${item.id.substring(0, 8)}...`;
+                      } else if (item.type === 'symposium') {
+                        // For symposium, use the name from tickets
+                        itemName = registrationDetails.tickets?.name || 'Symposium Ticket';
+                      } else {
+                        itemName = `${item.type.charAt(0).toUpperCase() + item.type.slice(1)} Item`;
+                      }
+                    }
+                    
+                    itemsList.push({ 
+                      name: itemName || `Item ${item.id ? item.id.substring(0, 8) : ''}`, 
+                      price: item.amount 
+                    });
+                  }
+                });
+              }
+            });
+
+            displayOrderDetails = {
+              registrationNumber: registrationDetails.registration_number,
+              participants: participantNames,
+              items: itemsList,
+              totalAmount: registrationDetails.final_amount || 0,
+            };
+
+          } else {
+            // --- Fallback logic if order_details is missing --- 
+            console.warn('order_details not found or invalid, using fallback logic.');
+            const ticketInfo = typeof registrationDetails.tickets === 'object' && registrationDetails.tickets !== null
+              ? registrationDetails.tickets
+              : null;
+
+            // Helper function to get price based on type (only used in fallback)
+            const getPriceForParticipant = (participantType: string, ticketData: any): number => {
+              switch (participantType) {
+                case 'student': return ticketData?.price_student || 0;
+                case 'nurse': return ticketData?.price_nurse || 0;
+                case 'general_doctor': return ticketData?.price_general_doctor || 0;
+                case 'specialist_doctor': return ticketData?.price_specialist_doctor || 0;
+                case 'other': return ticketData?.price_other || 0; // Map 'other' (Residen) to price_other
+                default: return 0;
+              }
+            };
+
+            const itemsList: { name: string; price: number }[] = [];
+            if (ticketInfo) {
+              participantsArray.forEach((participant: any) => {
+                const price = getPriceForParticipant(participant.participant_type, ticketInfo);
+                // Add symposium ticket (assuming fallback only covers symposium)
+                if (price > 0) {
+                  itemsList.push({
+                    name: ticketInfo.name || 'Symposium Ticket', // Use ticket name or default
+                    price: price
+                  });
+                }
+                // Note: Fallback doesn't easily reconstruct workshop prices without order_details
+              });
+            } else {
+                console.warn("Ticket info not found in fallback scenario.")
+            }
+
+            displayOrderDetails = {
+              registrationNumber: registrationDetails.registration_number,
+              participants: participantNames,
+              items: itemsList,
+              totalAmount: registrationDetails.final_amount || 0, // Use final_amount for display
+            };
+          }
+
+          setOrderDetails(displayOrderDetails);
 
         } catch (err: any) {
           console.error("Error fetching registration details:", err);
@@ -416,7 +529,7 @@ export function AdminParticipants() {
       };
       fetchDetails();
     }
-  }, [showManualVerifyModal, selectedParticipant, supabase]);;
+  }, [showManualVerifyModal, selectedParticipant, supabase]);
 
   // Handler function to resend the paid invoice/ticket
   const handleResendPaidInvoice = async (participant: ParticipantData) => {
@@ -429,16 +542,17 @@ export function AdminParticipants() {
     setIsResending(participant.participant_id); // Set loading state for this specific participant
 
     try {
-      const { error: functionError } = await supabase.functions.invoke('send-paid-invoice', {
+      // Call the new Edge Function
+      const { error } = await supabase.functions.invoke('send-paid-invoice', {
         body: { 
           registrationId: participant.registration_id, 
           participantId: participant.participant_id 
         }
       });
 
-      if (functionError) {
-        console.error('Error invoking send-paid-invoice function:', functionError);
-        throw new Error(functionError.message || 'Gagal memanggil fungsi kirim ulang.');
+      if (error) {
+        console.error('Error invoking send-paid-invoice function:', error);
+        throw new Error(error.message || 'Gagal memanggil fungsi kirim ulang.');
       }
 
       console.log(`Resend function invoked successfully for participant: ${participant.participant_id}`);
@@ -504,7 +618,7 @@ export function AdminParticipants() {
               <TableHead>Kategori Peserta</TableHead>
               <TableHead>Status Registrasi</TableHead>
               <TableHead>Catatan Pembayaran</TableHead>
-              <TableHead>Minat EWaCO</TableHead> {/* Added EWaCO Header */}
+              <TableHead>Minat Ewaco</TableHead> {/* Added EWaCO Header */}
               <TableHead className="text-right">Aksi</TableHead>
             </TableRow>
           </TableHeader>
@@ -599,9 +713,8 @@ export function AdminParticipants() {
           <DialogHeader>
             <DialogTitle>Verifikasi Pembayaran Manual</DialogTitle>
             <DialogDescription>
-              Verifikasi pembayaran untuk peserta: <strong>{selectedParticipant?.full_name ?? ''}</strong> 
-              (Reg: {selectedParticipant?.registration_number ?? 'N/A'}).
-              {/* TODO: Fetch and display order details here */}
+              Verifikasi pembayaran manual untuk No. Registrasi: <strong>{selectedParticipant?.registration_number ?? 'N/A'}</strong>.
+              Detail pesanan dan peserta terkait akan dimuat di bawah.
             </DialogDescription>
           </DialogHeader>
           {/* Placeholder for order details */}

@@ -71,6 +71,16 @@ export function AdminWsParticipants() {
   const [isVerifying, setIsVerifying] = useState(false); 
   const [isResending, setIsResending] = useState<string | null>(null); 
 
+  // Add states for order details
+  const [orderDetails, setOrderDetails] = useState<{
+    registrationNumber: string | null;
+    participants: string[];
+    items: { name: string; price: number }[];
+    totalAmount: number;
+  } | null>(null);
+  const [isFetchingDetails, setIsFetchingDetails] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
   const supabase = createClientComponentClient();
 
   // Fetch list of workshops for the filter dropdown
@@ -347,6 +357,9 @@ export function AdminWsParticipants() {
       }));
       setRelatedWorkshops(workshops);
 
+      // Fetch detailed order information from registrations.order_details
+      fetchOrderDetails(participant.registration_id);
+
     } catch (err: any) {
       console.error("Error in fetchRelatedItems:", err);
       toast({ 
@@ -356,6 +369,175 @@ export function AdminWsParticipants() {
       });
       setRelatedParticipants([]); // Clear on error
       setRelatedWorkshops([]);
+    }
+  };
+
+  // Function to fetch detailed order information from registrations.order_details
+  const fetchOrderDetails = async (registrationId: string) => {
+    if (!registrationId) return;
+
+    console.log(`Fetching order details for registration_id: ${registrationId}`);
+    setIsFetchingDetails(true);
+    setFetchError(null);
+    setOrderDetails(null);
+
+    try {
+      // Use the API endpoint to fetch registration details
+      const response = await fetch(`/api/registrations/${registrationId}`);
+      const jsonResponse = await response.json();
+
+      // Log the full API response for debugging
+      console.log('API Response for order details:', JSON.stringify(jsonResponse, null, 2));
+
+      if (!response.ok && !jsonResponse.data) {
+        throw new Error(jsonResponse.error || 'Failed to fetch registration details');
+      }
+
+      const registrationDetails = jsonResponse.data;
+      console.log('Fetched registration details:', registrationDetails);
+
+      // Prepare structure for order details to be displayed
+      let displayOrderDetails: { 
+        registrationNumber: string | null;
+        participants: string[];
+        items: { name: string; price: number }[];
+        totalAmount: number;
+      } | null = null;
+
+      // Get participant names from the main participants array
+      const participantsArray = Array.isArray(registrationDetails.participants)
+        ? registrationDetails.participants
+        : [];
+      const participantNames = participantsArray.map((p: any) => p.full_name || 'Unknown Name');
+
+      // --- Use order_details if available --- 
+      if (registrationDetails.order_details && Array.isArray(registrationDetails.order_details.participants)) {
+        console.log('Using order_details from API:', registrationDetails.order_details);
+        const workshopIdsToFetch = new Set<string>();
+
+        // Pre-scan to identify workshops without names
+        registrationDetails.order_details.participants.forEach((participant: { items: any[] }) => {
+          if (Array.isArray(participant.items)) {
+            participant.items.forEach((item: { type: string; name: string; id: string }) => {
+              if (item.type === 'workshop' && !item.name && item.id) {
+                workshopIdsToFetch.add(item.id);
+              }
+            });
+          }
+        });
+
+        // If we have workshop IDs missing names, fetch them
+        let workshopTitles: Record<string, string> = {};
+        if (workshopIdsToFetch.size > 0) {
+          try {
+            const { data: workshopsData } = await supabase
+              .from('workshops')
+              .select('id, title')
+              .in('id', Array.from(workshopIdsToFetch));
+
+            // Create a map of ID -> title
+            if (workshopsData) {
+              workshopsData.forEach((workshop: any) => {
+                workshopTitles[workshop.id] = workshop.title;
+              });
+            }
+          } catch (err) {
+            console.error("Error fetching workshop titles:", err);
+          }
+        }
+
+        // Now process all items with workshop names available
+        const itemsList: { name: string; price: number }[] = [];
+        registrationDetails.order_details.participants.forEach((participantDetail: { items: any[] }) => {
+          if (Array.isArray(participantDetail.items)) {
+            participantDetail.items.forEach((item: { type: string; name: string; id: string; amount: number }) => {
+              if (typeof item.amount === 'number') {
+                let itemName = item.name;
+
+                // If name is missing but we have type and id
+                if (!itemName && item.type && item.id) {
+                  if (item.type === 'workshop') {
+                    // Use the title we fetched from the database
+                    itemName = workshopTitles[item.id] || `Workshop ID: ${item.id.substring(0, 8)}...`;
+                  } else if (item.type === 'symposium') {
+                    // For symposium, use the name from tickets
+                    itemName = registrationDetails.tickets?.name || 'Symposium Ticket';
+                  } else {
+                    itemName = `${item.type.charAt(0).toUpperCase() + item.type.slice(1)} Item`;
+                  }
+                }
+
+                itemsList.push({ 
+                  name: itemName || `Item ${item.id ? item.id.substring(0, 8) : ''}`, 
+                  price: item.amount 
+                });
+              }
+            });
+          }
+        });
+
+        displayOrderDetails = {
+          registrationNumber: registrationDetails.registration_number,
+          participants: participantNames,
+          items: itemsList,
+          totalAmount: registrationDetails.final_amount || 0,
+        };
+      } else {
+        // --- Fallback logic if order_details is missing --- 
+        console.warn('order_details not found or invalid, using fallback logic.');
+
+        // Create a simple list with the workshops we already know about
+        const itemsList: { name: string; price: number }[] = [];
+
+        // Add symposium ticket if available
+        if (registrationDetails.tickets) {
+          participantsArray.forEach((participant: any) => {
+            const ticketInfo = registrationDetails.tickets;
+            if (ticketInfo) {
+              const priceKey = `price_${participant.participant_type}`;
+              const price = ticketInfo[priceKey] || 0;
+              if (price > 0) {
+                itemsList.push({
+                  name: ticketInfo.name || 'Symposium Ticket',
+                  price: price
+                });
+              }
+            }
+          });
+        }
+
+        // Add workshops from our related workshops list
+        relatedWorkshops.forEach(workshop => {
+          // Try to find the workshop in the workshops list to get the price
+          const workshopInfo = workshopList.find(w => w.title === workshop.name);
+          if (workshopInfo) {
+            itemsList.push({
+              name: workshop.name,
+              price: 0 // We don't have the price in this fallback scenario
+            });
+          }
+        });
+
+        displayOrderDetails = {
+          registrationNumber: registrationDetails.registration_number,
+          participants: participantNames,
+          items: itemsList,
+          totalAmount: registrationDetails.final_amount || 0,
+        };
+      }
+
+      setOrderDetails(displayOrderDetails);
+
+    } catch (err: any) {
+      console.error("Error fetching order details:", err);
+      setFetchError(err.message || 'Gagal memuat detail pesanan.');
+      toast({ 
+        title: "Error", 
+        description: err.message || 'Gagal memuat detail pesanan.', 
+        variant: "destructive" 
+      });
+    } finally {
+      setIsFetchingDetails(false);
     }
   };
 
@@ -508,40 +690,27 @@ export function AdminWsParticipants() {
               
               {/* Replace DialogDescription with div to avoid nesting errors */}
               <div className="text-sm text-muted-foreground py-4">
-                <div className="mt-2 mb-4">
-                  <h3 className="font-medium text-lg">Informasi Registrasi:</h3>
-                  <div className="mt-2 p-3 bg-muted rounded-md">
-                    <div>No. Registrasi: <strong>{selectedParticipant?.registration_number ?? 'N/A'}</strong></div>
-                    <div>Status: <strong>{selectedParticipant?.registration_status ?? 'N/A'}</strong></div>
-                    {selectedParticipant?.payment_nominal && (
-                      <div>Nominal Pembayaran: <strong>{new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(selectedParticipant.payment_nominal)}</strong></div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="mt-4">
-                  <h3 className="font-medium text-lg">Item yang dibeli dalam registrasi ini:</h3>
-                  {relatedWorkshops.length > 0 ? (
-                    <div className="mt-2 border rounded-md overflow-hidden">
-                      <table className="w-full">
-                        <thead className="bg-muted">
-                          <tr>
-                            <th className="px-4 py-2 text-left">Workshop</th>
-                            <th className="px-4 py-2 text-left">Peserta</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {relatedWorkshops.map((item, index) => (
-                            <tr key={index} className="border-t">
-                              <td className="px-4 py-2">{item.name}</td>
-                              <td className="px-4 py-2">{item.participant}</td>
-                            </tr>
+                {/* Display order details from registrations.order_details */}
+                <div className="p-4 border rounded bg-muted/40 min-h-[150px]">
+                  {isFetchingDetails ? (
+                    <p className="text-sm text-center text-muted-foreground">Memuat detail pesanan...</p>
+                  ) : fetchError ? (
+                    <p className="text-sm text-center text-red-600">{fetchError}</p>
+                  ) : orderDetails ? (
+                    <div className="text-sm space-y-2">
+                      <p><strong>No. Registrasi:</strong> {orderDetails.registrationNumber}</p>
+                      <p><strong>Peserta Terkait:</strong> {orderDetails.participants.join(', ')}</p>
+                      <div><strong>Item Pesanan:</strong>
+                        <ul className="list-disc pl-5 mt-1">
+                          {orderDetails.items.map((item: any, index: number) => (
+                            <li key={index}>{item.name} ({formatCurrency(item.price)})</li>
                           ))}
-                        </tbody>
-                      </table>
+                        </ul>
+                      </div>
+                      <p className="font-semibold"><strong>Total Tagihan:</strong> {formatCurrency(orderDetails.totalAmount)}</p>
                     </div>
                   ) : (
-                    <div className="text-sm text-muted-foreground">Tidak ada item terkait yang ditemukan.</div>
+                    <p className="text-sm text-center text-muted-foreground">Detail pesanan akan muncul di sini.</p>
                   )}
                 </div>
 

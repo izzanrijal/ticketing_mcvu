@@ -342,258 +342,236 @@ export async function POST(request: Request) {
     console.log("Registration created successfully with ID:", registrationId)
 
     // --- Step 2: Create Participant Records and link to Registration --- 
-    // Validasi apakah participants array ada dan valid
+    const participantOrderItems: { participant_id: string, items: any[] }[] = []; // Store item details per participant
+    const createdParticipantIds: string[] = []
+
+    // Fallback if participants array is missing or empty (use contact person)
     if (!registrationData.participants || !Array.isArray(registrationData.participants) || registrationData.participants.length === 0) {
-      console.error("Invalid or empty participants array:", registrationData.participants)
-      // Buat participant default dari contact person
+      console.warn("Invalid or empty participants array, using contact person as default participant.")
       registrationData.participants = [{
-        id: `default-${Date.now()}`,
         full_name: registrationData.contact_person?.name || "Unnamed Participant",
         email: registrationData.contact_person?.email || "",
         phone: registrationData.contact_person?.phone || "",
+        nik: "", // NIK is required, but we might not have it for contact person
         participant_type: "other",
         institution: "",
         workshops: [],
-        attendSymposium: true
+        attendSymposium: true, // Assume contact person attends symposium if no participant data
+        ewaco_interest: false
       }]
-      console.log("Created default participant from contact person:", registrationData.participants[0])
     }
-    
-    // Process each participant and insert into participants table
-    const createdParticipantIds: string[] = []
-    for (const participant of registrationData.participants) {
+
+    for (const participantInput of registrationData.participants) {
       try {
-        // Log raw participant data untuk debugging
-        console.log("Raw participant data received:", JSON.stringify(participant))
-        
-        // Validasi lebih longgar untuk data participant
-        // Pastikan participant memiliki nama, jika tidak gunakan nilai default
-        const participantName = participant.full_name || registrationData.contact_person?.name || "Unnamed Participant"
-        
-        // Prepare participant data without registration_id initially
+        const participantName = participantInput.full_name || registrationData.contact_person?.name || "Unnamed Participant"
         const participantData: any = {
-          full_name: participantName, // Gunakan nama yang sudah divalidasi
-          // Gunakan nilai default untuk field yang mungkin kosong
-          email: participant.email || registrationData.contact_person?.email || "",
-          phone: participant.phone || registrationData.contact_person?.phone || "",
-          nik: participant.nik || "",
-          participant_type: participant.participant_type || "other",
-          institution: participant.institution || "",
-          ewaco_interest: participant.ewaco_interest || false, // Add ewaco_interest field
-          registration_id: registrationId // Add registration_id directly
+          full_name: participantName,
+          email: participantInput.email || registrationData.contact_person?.email || "",
+          phone: participantInput.phone || registrationData.contact_person?.phone || "",
+          nik: participantInput.nik || "", // Handle potentially missing NIK
+          participant_type: participantInput.participant_type || "other",
+          institution: participantInput.institution || "",
+          ewaco_interest: participantInput.ewaco_interest || false,
+          registration_id: registrationId
         }
-        
-        console.log("Creating participant with data:", JSON.stringify(participantData))
-        
-        try {
-          console.log("Attempting to insert participant with data:", JSON.stringify(participantData))
-          
-          // Insert participant record with error handling
-          const { data: createdParticipant, error: participantError } = await supabase
-            .from("participants")
-            .insert(participantData)
-            .select()
-          
-          if (participantError) {
-            console.error(
-              "Error creating participant with data:", 
-              JSON.stringify(participantData),
-              "Error:",
-              participantError.message,
-              participantError.details
-            )
-            // Continue with other participants even if one fails
-            continue
-          }
-          
-          if (!createdParticipant || createdParticipant.length === 0 || !createdParticipant[0]?.id) {
-            console.error(
-              "Participant created but no ID returned. Data attempted:", 
-              JSON.stringify(participantData),
-              "Result:",
-              JSON.stringify(createdParticipant)
-            )
-            continue
-          }
-          
-          // Use the first participant from the array
-          const newParticipant = createdParticipant[0]
-          console.log("Participant created successfully:", newParticipant)
-          
-          // Add to our array of participant IDs
-          createdParticipantIds.push(newParticipant.id);
-          
-          // --- Create QR Code and Workshop Registrations within this loop --- 
-          
-          // Generate and manage QR Code
-          try {
-            const qrCodeId = generateQRCodeId()
-            const { error: qrError } = await supabase.from("participant_qr_codes").insert({
-              participant_id: newParticipant.id,
-              registration_id: registrationId,
-              qr_code_id: qrCodeId,
-            })
-            
-            if (qrError) {
-              console.error(`Error creating QR code for participant ${newParticipant.id}:`, qrError)
-            } else {
-              generateAndStoreQRCodeImage(qrCodeId, newParticipant.id, registrationId, supabase)
-                .catch(imgError => {
-                  console.error(`Error generating QR code image for ${newParticipant.id}:`, imgError)
-                })
-            }
-          } catch (qrInsertError) {
-            console.error(`Exception creating QR code for participant ${newParticipant.id}:`, qrInsertError)
-          }
-          
-          // Create workshop registrations if needed
-          if (participant.workshops && Array.isArray(participant.workshops) && participant.workshops.length > 0) {
-            console.log("Creating workshop registrations for participant:", newParticipant.id)
-            for (const workshopId of participant.workshops) {
-              if (!workshopId) continue; // Skip invalid workshop IDs
-              const workshopRegistration = {
-                participant_id: newParticipant.id,
-                workshop_id: workshopId,
-                registration_id: registrationId
-              }
-              console.log(`Registering workshop ${workshopId} for participant ${newParticipant.id}`)
-              try {
-                const { error: workshopError } = await supabase
-                  .from("workshop_registrations")
-                  .insert(workshopRegistration)
-                if (workshopError) {
-                  console.error("Error registering workshop:", workshopError.message)
-                } else {
-                  console.log("Workshop registration created for workshop ID:", workshopId)
-                }
-              } catch (workshopError) {
-                console.error(`Error registering workshop ${workshopId}:`, workshopError)
-              }
-            }
-          }
-          // --- End QR Code and Workshop --- 
-          
-        } catch (insertError) {
-          console.error("Exception during participant insert:", insertError)
-          continue
-        }
-        
-      } catch (individualParticipantError) {
-        console.error("Error processing individual participant:", individualParticipantError)
-        // Continue with other participants
-      }
-    }
-    
-    // Jika tidak ada participant yang berhasil dibuat, buat satu participant default
-    if (createdParticipantIds.length === 0) {
-      console.log("No participants were created successfully, creating a default participant")
-      
-      let defaultParticipant: any = {}
-      
-      try {
-        console.log("Attempting to create default participant based on contact person:", registrationData.contact_person)
-        
-        // Buat participant default berdasarkan contact person (gunakan optional chaining)
-        defaultParticipant = {
-          full_name: registrationData.contact_person?.name || "Unnamed Participant",
-          email: registrationData.contact_person?.email || "",
-          phone: registrationData.contact_person?.phone || "",
-          participant_type: "other",
-          institution: "",
-          ewaco_interest: false, // Add ewaco_interest field
-          registration_id: registrationId // Add registration_id
-        }
-        
-        console.log("Creating default participant with data:", JSON.stringify(defaultParticipant))
-        
-        // Gunakan .select() untuk konsistensi
-        const { data: createdDefaultArray, error: defaultError } = await supabase
+
+        console.log("Attempting to insert participant with data:", JSON.stringify(participantData))
+        const { data: createdParticipant, error: participantError } = await supabase
           .from("participants")
-          .insert(defaultParticipant)
+          .insert(participantData)
           .select()
-          
-        if (defaultError) {
-          console.error(
-            "Error creating default participant. Data attempted:", 
-            JSON.stringify(defaultParticipant),
-            "Error:", 
-            defaultError.message, 
-            defaultError.details, 
-            defaultError.hint
-          )
-          // Jangan langsung return error, biarkan cek akhir di luar try-catch yang menangani
-        } else if (createdDefaultArray && createdDefaultArray.length > 0 && createdDefaultArray[0]?.id) {
-          // Cek hasil array
-          const createdDefault = createdDefaultArray[0]
-          createdParticipantIds.push(createdDefault.id)
-          console.log("Default participant created successfully with ID:", createdDefault.id)
-          
-          // --- Create QR Code and Workshop Registrations for Default Participant --- 
-          try {
-            const qrCodeId = generateQRCodeId()
-            const { error: qrError } = await supabase.from("participant_qr_codes").insert({
-              participant_id: createdDefault.id,
-              registration_id: registrationId,
-              qr_code_id: qrCodeId,
-            })
-            if (qrError) {
-              console.error(`Error creating QR code for default participant ${createdDefault.id}:`, qrError)
-            } else {
-              generateAndStoreQRCodeImage(qrCodeId, createdDefault.id, registrationId, supabase)
-                .catch(imgError => {
-                  console.error(`Error generating QR code image for default participant ${createdDefault.id}:`, imgError)
-                })
-            }
-          } catch (qrInsertError) {
-            console.error(`Exception creating QR code for default participant ${createdDefault.id}:`, qrInsertError)
-          }
-          // Default participant usually doesn't have workshops, but add logic if needed in future
-          // --- End QR Code and Workshop --- 
-          
-        } else {
-          console.error(
-            "Default participant created but no valid data returned. Data attempted:",
-            JSON.stringify(defaultParticipant),
-            "Result:",
-            JSON.stringify(createdDefaultArray)
-          )
-          // Jangan langsung return error, biarkan cek akhir di luar try-catch yang menangani
+          .single() // Assume insert returns the created record
+
+        if (participantError) {
+          console.error("Error creating participant:", participantError)
+          // Consider how to handle partial failure - rollback?
+          // For now, we log and continue, but this might leave orphaned registrations
+          continue // Skip to the next participant
         }
-      } catch (exceptionDuringDefaultCreation) {
-        console.error(
-          "Exception during default participant creation. Data attempted:", 
-          JSON.stringify(defaultParticipant), 
-          "Exception:",
-          exceptionDuringDefaultCreation
-        )
-        // Jangan langsung return error, biarkan cek akhir di luar try-catch yang menangani
-      }
-      
-      // Jika masih tidak ada participant yang berhasil dibuat (setelah mencoba default)
-      if (createdParticipantIds.length === 0) {
-        console.error("Failed to create any participants, even after attempting default. Check previous logs for specific errors.")
-        return NextResponse.json(
-          { error: "Failed to create any participants" },
-          { status: 400 }
-        )
+
+        if (!createdParticipant) {
+          console.error("Participant insert did not return data for:", participantName);
+          continue; // Skip if insertion failed silently
+        }
+
+        console.log(`Participant ${createdParticipant.full_name} created with ID: ${createdParticipant.id}`)
+        createdParticipantIds.push(createdParticipant.id)
+
+        // --- Generate and store QR Code --- 
+        try {
+          const qrCodeId = generateQRCodeId(); // Assume this function exists
+          const { error: qrError } = await supabase.from("participant_qr_codes").insert({
+            participant_id: createdParticipant.id,
+            registration_id: registrationId, // Ensure registration_id is included
+            qr_code_id: qrCodeId,
+          });
+
+          if (qrError) {
+            console.error(`Error creating QR code record for participant ${createdParticipant.id}:`, qrError);
+          } else {
+            // Assuming async image generation/upload
+            generateAndStoreQRCodeImage(qrCodeId, createdParticipant.id, registrationId, supabase)
+              .catch(imgError => {
+                console.error(`Error generating/storing QR code image for ${createdParticipant.id}:`, imgError);
+              });
+          }
+        } catch (qrSetupError) {
+          console.error(`Exception during QR Code setup for participant ${createdParticipant.id}:`, qrSetupError);
+        }
+        // --- End QR Code --- 
+
+        // --- Construct item list for this participant (for order_details JSON) --- 
+        const currentParticipantItems: any[] = [];
+        // Add symposium ticket if attending
+        if (participantInput.attendSymposium === true && ticketData) {
+          const priceKey = `price_${createdParticipant.participant_type}`;
+          const symposiumPrice = ticketData[priceKey] !== undefined ? ticketData[priceKey] : 0;
+          if (symposiumPrice > 0) { // Only add if price is valid
+            currentParticipantItems.push({
+              type: 'symposium',
+              id: ticketData.id,
+              name: ticketData.name,
+              amount: symposiumPrice
+            });
+          }
+        }
+
+        // Add workshops
+        if (participantInput.workshops && Array.isArray(participantInput.workshops) && participantInput.workshops.length > 0) {
+          for (const workshopId of participantInput.workshops) {
+            const workshop = workshopDetails.find((w: any) => w.id === workshopId)
+            if (workshop && workshop.price > 0) { // Ensure workshop exists and has price
+              currentParticipantItems.push({
+                type: 'workshop',
+                id: workshop.id,
+                name: workshop.title, // Use workshop.title instead of workshop.name
+                amount: workshop.price
+              });
+
+              // Also create the workshop_registrations record
+              const { error: workshopRegError } = await supabase
+                .from("workshop_registrations")
+                .insert({ 
+                  participant_id: createdParticipant.id, 
+                  workshop_id: workshopId,
+                  registration_id: registrationId // <<< Fix: Add registration_id
+                })
+              if (workshopRegError) {
+                console.error(`Error linking participant ${createdParticipant.id} to workshop ${workshopId}:`, workshopRegError)
+              }
+            }
+          }
+        }
+
+        // Add this participant's items to the main list (for order_details JSON)
+        participantOrderItems.push({
+          participant_id: createdParticipant.id,
+          items: currentParticipantItems
+        });
+        // --- End item list construction ---
+      } catch (innerError) {
+        console.error(`Error processing participant ${participantInput.full_name || 'unknown'}:`, innerError)
+        // Decide if registration should fail completely
       }
     }
-    
-    // --- Step 2.5: Update Registration with Participant IDs ---
-    console.log(`Updating registration ${registrationId} with participant IDs:`, createdParticipantIds);
-    const { error: updateRegError } = await supabase
-      .from('registrations')
+
+    // --- Step 3: Update Registration with Participant IDs and Order Details JSON --- 
+    const orderDetailsJson = { participants: participantOrderItems };
+    console.log("Updating registration with Participant IDs and Order Details:", createdParticipantIds, JSON.stringify(orderDetailsJson));
+
+    // First update just the participant_ids (this is critical and we'll wait for it)
+    const { error: updateParticipantIdsError } = await supabase
+      .from("registrations")
       .update({ participant_ids: createdParticipantIds })
-      .eq('id', registrationId);
+      .eq("id", registrationId)
 
-    if (updateRegError) {
-      // Log the error but don't necessarily stop the process, 
-      // as registration & participants are already created.
-      // Critical monitoring should catch this for investigation.
-      console.error(`Failed to update registration ${registrationId} with participant IDs:`, updateRegError);
+    if (updateParticipantIdsError) {
+      console.error("Error updating registration with participant IDs:", updateParticipantIdsError)
+      // This is critical, so we'll return an error
+      return NextResponse.json(
+        { error: "Failed to update registration with participant IDs" },
+        { status: 500 }
+      )
     }
 
-    // --- Step 3: Create Payment Record --- 
+    // Then update the order_details asynchronously (fire and forget)
+    // We don't need to wait for this to complete before returning the response
+    (async () => {
+      try {
+        const result = await supabase
+          .from("registrations")
+          .update({ order_details: orderDetailsJson })
+          .eq("id", registrationId);
+          
+        if (result.error) {
+          console.error("Error updating registration with order details:", result.error);
+        } else {
+          console.log("Successfully updated registration with order details");
+        }
+      } catch (error) {
+        console.error("Exception during async order_details update:", error);
+      }
+    })(); // Execute immediately but don't await
+
+    // --- Step 4: Create Contact Person Record --- 
+    const contactPersonFromRequest = registrationData.contact_person;
+    if (contactPersonFromRequest && contactPersonFromRequest.email) {
+      console.log(`Attempting to insert contact person data for registration ${registrationId}...`);
+      const { data: contactPersonData, error: contactPersonError } = await supabaseAdmin
+        .from('contact_persons')
+        .insert({
+          registration_id: registrationId,
+          name: contactPersonFromRequest.name,
+          email: contactPersonFromRequest.email,
+          phone: contactPersonFromRequest.phone,
+        })
+        .select()
+        .single();
+
+      if (contactPersonError) {
+        console.error(`Error inserting contact person for registration ${registrationId}:`, contactPersonError);
+        // Decide if this should be a critical error or just logged
+        // For now, log and continue, email might still fail later
+      } else {
+        console.log(`Contact person inserted successfully for registration ${registrationId}:`, contactPersonData);
+      }
+    } else {
+      console.log(`No contact person data provided in request for registration ${registrationId}, skipping insert.`);
+    }
+
+    // --- Send registration invoice email asynchronously ---
+    // Check again if contact person email exists before sending
+    if (contactPersonFromRequest && contactPersonFromRequest.email) {
+      const recipientEmail = contactPersonFromRequest.email;
+      console.log(`Attempting to send invoice to contact person: ${recipientEmail} for registration ${registrationId}`);
+
+      // Prepare arguments for the function call based on its definition
+      const originalAmount = registrationData.totalAmount ?? 0;
+      const discountAmount = registrationData.discount_amount ?? 0; // Assuming discount_amount is available or default to 0
+      const uniqueAmount = uniqueFinalAmount;
+      const uniqueDeduction = originalAmount - uniqueAmount;
+      const paymentType = "bank_transfer"; // Assuming bank transfer for now
+      const originalParticipantsData = registrationData.participants ?? [];
+
+      // Fire-and-forget: Don't await this promise. Call with individual arguments.
+      sendRegistrationInvoice(
+        registrationId,                      // registrationId: string
+        registration.registration_number,    // registrationNumber: string
+        originalAmount,                      // originalAmount: number
+        discountAmount,                      // discountAmount: number
+        uniqueDeduction,                     // uniqueDeduction: number
+        paymentType,                         // paymentType: string
+        originalParticipantsData             // originalParticipantsData: any[]
+      ).catch(emailError => {
+        // Log error if sending email fails, but don't block response
+        console.error(`Error sending registration invoice for ${registrationId} to ${recipientEmail}:`, emailError);
+      });
+      console.log(`Initiated async invoice email send for registration ${registrationId} to ${recipientEmail}`);
+    } else {
+      console.warn(`No valid contact_person with email found in registrationData for ${registrationId}, skipping invoice email.`);
+    }
+
+    // --- Step 5: Create Payment Record --- 
     // Prepare payment data
     const paymentData = {
       status: "pending",
@@ -670,64 +648,6 @@ export async function POST(request: Request) {
       // Schedule payment check for this registration
       // This will start a timer to check for payment every 5 minutes
       await schedulePaymentCheck(registrationId)
-    }
-
-    // --- Insert Contact Person if provided ---
-    const contactPersonFromRequest = registrationData.contact_person;
-    if (contactPersonFromRequest && contactPersonFromRequest.email) {
-      console.log(`Attempting to insert contact person data for registration ${registrationId}...`);
-      const { data: contactPersonData, error: contactPersonError } = await supabaseAdmin
-        .from('contact_persons')
-        .insert({
-          registration_id: registrationId,
-          name: contactPersonFromRequest.name,
-          email: contactPersonFromRequest.email,
-          phone: contactPersonFromRequest.phone,
-        })
-        .select()
-        .single();
-
-      if (contactPersonError) {
-        console.error(`Error inserting contact person for registration ${registrationId}:`, contactPersonError);
-        // Decide if this should be a critical error or just logged
-        // For now, log and continue, email might still fail later
-      } else {
-        console.log(`Contact person inserted successfully for registration ${registrationId}:`, contactPersonData);
-      }
-    } else {
-      console.log(`No contact person data provided in request for registration ${registrationId}, skipping insert.`);
-    }
-
-    // --- Send registration invoice email asynchronously ---
-    // Check again if contact person email exists before sending
-    if (contactPersonFromRequest && contactPersonFromRequest.email) {
-      const recipientEmail = contactPersonFromRequest.email;
-      console.log(`Attempting to send invoice to contact person: ${recipientEmail} for registration ${registrationId}`);
-
-      // Prepare arguments for the function call based on its definition
-      const originalAmount = registrationData.totalAmount ?? 0;
-      const discountAmount = registrationData.discount_amount ?? 0; // Assuming discount_amount is available or default to 0
-      const uniqueAmount = paymentData.amount ?? 0;
-      const uniqueDeduction = originalAmount - uniqueAmount;
-      const paymentType = paymentData.payment_method ?? 'unknown';
-      const originalParticipantsData = registrationData.participants ?? [];
-
-      // Fire-and-forget: Don't await this promise. Call with individual arguments.
-      sendRegistrationInvoice(
-        registrationId,                      // registrationId: string
-        registration.registration_number,    // registrationNumber: string
-        originalAmount,                      // originalAmount: number
-        discountAmount,                      // discountAmount: number
-        uniqueDeduction,                     // uniqueDeduction: number
-        paymentType,                         // paymentType: string
-        originalParticipantsData             // originalParticipantsData: any[]
-      ).catch(emailError => {
-        // Log error if sending email fails, but don't block response
-        console.error(`Error sending registration invoice for ${registrationId} to ${recipientEmail}:`, emailError);
-      });
-      console.log(`Initiated async invoice email send for registration ${registrationId} to ${recipientEmail}`);
-    } else {
-      console.warn(`No valid contact_person with email found in registrationData for ${registrationId}, skipping invoice email.`);
     }
 
     return NextResponse.json({
