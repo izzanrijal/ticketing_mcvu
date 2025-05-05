@@ -50,7 +50,7 @@ BEGIN
 END;
 $$;
 
--- Inferred Tables based on functions and MVCU 2025 Ticketing Platform requirements
+-- Inferred Tables based on functions and MCVU XXIII 2025 Ticketing Platform requirements
 
 -- Table: public.registrations
 CREATE TABLE IF NOT EXISTS public.registrations (

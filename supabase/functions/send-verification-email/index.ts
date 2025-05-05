@@ -59,10 +59,10 @@ serve(async (req)=>{
     const recipientName = participantData.full_name;
     const registrationNumber = registrationData.registration_number;
     const qrCodeId = qrCodeData.qr_code_id;
-    const subject = `Konfirmasi Registrasi MVCU 2025 - ${registrationNumber}`;
+    const subject = `Konfirmasi Registrasi MCVU XXIII 2025 - ${registrationNumber}`;
     const emailBody = `
       <html><body>
-        <h2>Konfirmasi Registrasi MVCU 2025 Berhasil!</h2>
+        <h2>Konfirmasi Registrasi MCVU XXIII 2025 Berhasil!</h2>
         <p>Halo ${recipientName},</p>
         <p>Registrasi Anda dengan nomor <strong>${registrationNumber}</strong> telah berhasil diverifikasi dan pembayaran telah diterima.</p>
         <h3>Informasi Check-in di Venue:</h3>
@@ -82,13 +82,13 @@ serve(async (req)=>{
     }).format(paymentAmount)}</li>
           <li>Catatan: ${paymentNotes}</li> 
         </ul>
-        <p>Terima kasih atas partisipasi Anda. Sampai jumpa di MVCU 2025!</p><br>
-        <p>Salam,</p><p>Panitia MVCU 2025</p>
+        <p>Terima kasih atas partisipasi Anda. Sampai jumpa di MCVU XXIII 2025!</p><br>
+        <p>Salam,</p><p>Panitia MCVU XXIII 2025</p>
       </body></html>
     `;
     // --- Send Email using Resend ---
     const resendPayload = {
-      from: `Panitia MVCU 2025 <panitia.mcvu@perkimakassar.com>`,
+      from: `Panitia MCVU XXIII 2025 <panitia.mcvu@perkimakassar.com>`,
       to: [
         recipientEmail
       ],

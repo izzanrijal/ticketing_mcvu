@@ -293,7 +293,7 @@ export async function sendRegistrationInvoice(
         console.log(`Generated HTML and PDF for ${registrationNumber}`);
 
         // --- Send Email --- 
-        const emailSubject = `Invoice Pendaftaran MVCU 2025 - ${registrationNumber}`;
+        const emailSubject = `Invoice Pendaftaran MCVU XXIII 2025 - ${registrationNumber}`;
         const recipientEmail = contactPerson?.email; 
 
         if (!recipientEmail) {
@@ -303,7 +303,7 @@ export async function sendRegistrationInvoice(
 
         try {
             await resend.emails.send({
-                from: 'Panitia MVCU 2025 <panitia.mcvu@perkimakassar.com>',
+                from: 'Panitia MCVU XXIII 2025 <panitia.mcvu@perkimakassar.com>',
                 to: [recipientEmail],
                 cc: ['mcvu2025@gmail.com'], // <<< ADDED CC
                 subject: emailSubject,
@@ -506,7 +506,7 @@ function generateInvoiceHtml(params: GenerateInvoiceParams): string {
     <body>
         <div class="email-wrapper">
             <div class="container">
-                <h1>Invoice Pendaftaran MVCU 2025</h1>
+                <h1>Invoice Pendaftaran MVCU XXIII 2025</h1>
                 <div style="text-align: right; margin-bottom: 20px;">
                     No: ${registrationNumber}<br>
                     Tanggal Dibuat: ${registrationCreationTime instanceof Date && !isNaN(registrationCreationTime.getTime()) ? registrationCreationTime.toLocaleDateString('id-ID') : 'N/A'}<br>
@@ -532,12 +532,12 @@ function generateInvoiceHtml(params: GenerateInvoiceParams): string {
                 ${paymentDetailsHtml}
 
                 <p style="margin-top: 25px;">Invoice ini juga terlampir dalam format PDF untuk referensi Anda.</p>
-                <p>Jika Anda memiliki pertanyaan, jangan ragu untuk menghubungi panitia melalui email [email panitia] atau WhatsApp [nomor WA panitia].</p>
+                <p>Jika Anda memiliki pertanyaan, jangan ragu untuk menghubungi panitia melalui email panitia.mcvu@perkimakassar.com atau WhatsApp +62-821-9061-5922.</p>
 
                 <div class="footer">
                     Hormat kami,<br>
-                    Panitia MVCU 2025<br>
-                    [Informasi Kontak Panitia Tambahan Jika Ada]
+                    Panitia MVCU XXIII 2025<br>
+                    panitia.mcvu@perkimakassar.com
                 </div>
             </div>
         </div>
@@ -873,7 +873,7 @@ export async function generateInvoicePdf(
     yPosition = moveYDown(drawText('- Hubungi panitia jika ada pertanyaan.', leftMargin+10, yPosition, smallFontSize), lineSpacing * 0.7);
 
     // --- Footer --- (Centered at bottom)
-    const footerText = "Panitia MVCU 2025 - Invoice ini sah tanpa tanda tangan.";
+    const footerText = "Panitia MCVU XXIII 2025 - Invoice ini sah tanpa tanda tangan.";
     drawText(footerText, width / 2, bottomMargin, smallFontSize, false, rgb(0.5, 0.5, 0.5), 'center');
 
     const pdfBytes = await pdfDoc.save();

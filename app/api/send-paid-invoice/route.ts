@@ -170,7 +170,7 @@ export async function POST(request: Request) {
             from: senderEmail,
             to: [contactPerson.email],
             subject: `Invoice Lunas: Registrasi ${registrationData.registration_number}`,
-            html: `<p>Dear ${contactPerson.full_name},</p><p>Terima kasih atas pembayaran Anda. Terlampir adalah invoice lunas untuk registrasi ${registrationData.registration_number}.</p><p>Salam,</p><p>Panitia MVCU 2025</p>`, // Customize email body
+            html: `<p>Dear ${contactPerson.full_name},</p><p>Terima kasih atas pembayaran Anda. Terlampir adalah invoice lunas untuk registrasi ${registrationData.registration_number}.</p><p>Salam,</p><p>Panitia MCVU XXIII 2025</p>`, // Customize email body
             attachments: [
                 {
                     filename: `Invoice-${registrationData.registration_number}.pdf`,

@@ -440,7 +440,7 @@ async function generatePaidInvoicePdf(params) {
   y -= lineHeight;
   
   if (registrationStatus === 'paid') {
-    drawText('- Invoice ini merupakan bukti pembayaran sah untuk registrasi MVCU 2025.', margin + 10, y);
+    drawText('- Invoice ini merupakan bukti pembayaran sah untuk registrasi MCVU XXIII 2025.', margin + 10, y);
     y -= lineHeight;
     
     drawText('- Simpan invoice ini sebagai bukti telah melakukan pembayaran.', margin + 10, y);
@@ -463,7 +463,7 @@ async function generatePaidInvoicePdf(params) {
   y -= 30;
   
   // Footer
-  drawText('Panitia MVCU 2025 - Invoice ini sah tanpa tanda tangan.', width / 2, y, { align: 'center', fontSize: 9 });
+  drawText('Panitia MCVU XXIII 2025 - Invoice ini sah tanpa tanda tangan.', width / 2, y, { align: 'center', fontSize: 9 });
   
   // Return the PDF as bytes
   return doc.save();
@@ -804,7 +804,7 @@ serve(async (req: Request)=>{
         }
         // Construct Email Body - PAID INVOICE VERSION (no payment instructions)
         console.log("Constructing paid invoice email body...");
-        const subject = `[LUNAS] Tiket MVCU 2025 - ${registrationNumber}`;
+        const subject = `[LUNAS] Tiket MCVU XXIII 2025 - ${registrationNumber}`;
         let qrCodeSection = '';
         if (qrCodeUrl && qrCodeUrl.trim() !== '') {
           qrCodeSection = `
@@ -838,12 +838,12 @@ serve(async (req: Request)=>{
           <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Tiket MVCU 2025 - ${registrationNumber}</title>
+            <title>Tiket MCVU XXIII 2025 - ${registrationNumber}</title>
           </head>
           <body style="font-family: sans-serif;">
-            <h2>Tiket Registrasi MVCU 2025 (LUNAS)</h2>
+            <h2>Tiket Registrasi MCVU XXIII 2025 (LUNAS)</h2>
             <p>Halo ${recipientName || 'Peserta'},</p>
-            <p>Terima kasih atas partisipasi Anda di MVCU 2025. Berikut adalah tiket Anda dengan nomor registrasi <strong>${registrationNumber}</strong>.</p>
+            <p>Terima kasih atas partisipasi Anda di MCVU XXIII 2025. Berikut adalah tiket Anda dengan nomor registrasi <strong>${registrationNumber}</strong>.</p>
             <p style="background-color: #e6f7e6; color: #2e7d32; padding: 10px; border: 1px solid #c8e6c9; border-radius: 4px;">
               <strong>Status Pembayaran: LUNAS</strong><br>
               Pembayaran Anda telah diverifikasi dan tiket Anda telah aktif.
@@ -875,8 +875,8 @@ serve(async (req: Request)=>{
                 <td style="padding-left: 15px;">${paymentNotes || 'Pembayaran berhasil diverifikasi'}</td>
               </tr>
             </table>
-            <p>Terima kasih atas partisipasi Anda. Sampai jumpa di MVCU 2025!</p><br>
-            <p>Salam,</p><p>Panitia MVCU 2025</p>
+            <p>Terima kasih atas partisipasi Anda. Sampai jumpa di MCVU XXIII 2025!</p><br>
+            <p>Salam,</p><p>Panitia MCVU XXIII 2025</p>
           </body>
           </html>
         `;
@@ -941,11 +941,11 @@ serve(async (req: Request)=>{
             
             // Prepare email data with null checks for all fields
             const resendPayload = {
-              from: `Panitia MVCU 2025 <panitia.mcvu@perkimakassar.com>`,
+              from: `Panitia MCVU XXIII 2025 <panitia.mcvu@perkimakassar.com>`,
               to: [
                 recipientEmail
               ],
-              subject: subject || `[LUNAS] Tiket MVCU 2025 - ${registrationNumber}`,
+              subject: subject || `[LUNAS] Tiket MCVU XXIII 2025 - ${registrationNumber}`,
               html: emailBody,
               attachments: [
                 {

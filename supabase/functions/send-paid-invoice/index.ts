@@ -163,7 +163,7 @@ serve(async (req: Request) => {
 
     const participantWithWorkshops = participantData as Participant & { workshop_registrations?: WorkshopRegistration[] }; 
 
-    const emailSubject = `Konfirmasi Pembayaran & Tiket MVCU 2025 - ${registrationData.registration_number}`;
+    const emailSubject = `Konfirmasi Pembayaran & Tiket MCVU XXIII 2025 - ${registrationData.registration_number}`;
 
     // --- Generate Correct QR Code Data URL --- (Define payload first)
     const qrDataPayload = JSON.stringify({
@@ -203,11 +203,11 @@ serve(async (req: Request) => {
         <p>Sampai jumpa di Makassar!</p>
         <br>
         <p>Hormat kami,</p>
-        <p>Panitia MVCU 2025</p>
+        <p>Panitia MCVU XXIII 2025</p>
     `;
 
     await resend.emails.send({
-        from: 'Panitia MVCU 2025 <panitia.mcvu@perkimakassar.com>', 
+        from: 'Panitia MCVU XXIII 2025 <panitia.mcvu@perkimakassar.com>', 
         to: [participantData.email], 
         subject: emailSubject,
         html: emailHtml,
