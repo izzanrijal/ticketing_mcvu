@@ -47,10 +47,12 @@ export function PaymentDetails({ registration }: PaymentDetailsProps) {
     minute: "2-digit",
   })
 
-  // Extract unique deduction from notes if available
-  const getUniqueDeduction = () => {
-    if (registration.notes && registration.notes.includes("Unique Deduction:")) {
-      const match = registration.notes.match(/Unique Deduction: (\d+)/)
+  // Extract unique addition from notes if available
+  const getUniqueAddition = () => {
+    if (registration.unique_code) {
+      return registration.unique_code;
+    } else if (registration.notes && registration.notes.includes("Unique Code: +")) {
+      const match = registration.notes.match(/Unique Code: \+(\d+)/)
       if (match && match[1]) {
         return Number.parseInt(match[1])
       }
@@ -58,8 +60,8 @@ export function PaymentDetails({ registration }: PaymentDetailsProps) {
     return null
   }
 
-  const uniqueDeduction = getUniqueDeduction()
-  const originalAmount = uniqueDeduction ? registration.final_amount + uniqueDeduction : registration.final_amount
+  const uniqueAddition = getUniqueAddition()
+  const originalAmount = uniqueAddition ? registration.final_amount - uniqueAddition : registration.final_amount
 
   // Copy account number to clipboard
   const copyToClipboard = (text: string) => {
@@ -137,13 +139,11 @@ export function PaymentDetails({ registration }: PaymentDetailsProps) {
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div className="text-muted-foreground">Paket</div>
                   <div>{ticket.name}</div>
-                  {uniqueDeduction && (
-                    <>
-                      <div className="text-muted-foreground">Harga Asli</div>
-                      <div>Rp {originalAmount.toLocaleString("id-ID")}</div>
-                      <div className="text-muted-foreground">Pengurangan Unik</div>
-                      <div className="text-amber-600">- Rp {uniqueDeduction.toLocaleString("id-ID")}</div>
-                    </>
+                  {uniqueAddition && (
+                    <div className="flex justify-between text-sm py-1">
+                      <div>Kode Unik Tambah:</div>
+                      <div className="text-green-600">+ Rp {uniqueAddition.toLocaleString("id-ID")}</div>
+                    </div>
                   )}
                   <div className="text-muted-foreground">Jumlah Pembayaran</div>
                   <div className="font-bold">Rp {registration.final_amount?.toLocaleString("id-ID") || "0"}</div>
@@ -187,12 +187,10 @@ export function PaymentDetails({ registration }: PaymentDetailsProps) {
                 <strong>tepat sebesar Rp {registration.final_amount?.toLocaleString("id-ID") || "0"}</strong> untuk
                 memudahkan verifikasi pembayaran.
               </p>
-              {uniqueDeduction && (
-                <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-md">
-                  <p className="font-medium text-amber-800">
-                    Jumlah pembayaran ini sudah termasuk pengurangan unik sebesar Rp{" "}
-                    {uniqueDeduction.toLocaleString("id-ID")} untuk identifikasi pembayaran Anda.
-                  </p>
+              {uniqueAddition && (
+                <div className="text-xs text-gray-600 mt-2">
+                  <span className="font-medium">Catatan:</span> Kami menambahkan kode unik sebesar Rp{" "}
+                  {uniqueAddition.toLocaleString("id-ID")} untuk identifikasi pembayaran Anda.
                 </div>
               )}
             </AlertDescription>

@@ -375,16 +375,17 @@ export function PaymentInstructions({ registrationId }: PaymentInstructionsProps
                     </div>
                   </div>
 
-                  {/* Add unique deduction information */}
+                  {/* Update unique code information to show addition instead of subtraction */}
                   <div className="bg-blue-50 p-3 rounded-md border border-blue-100">
-                    <h4 className="text-sm font-medium text-blue-800 mb-1">Informasi Angka Unik</h4>
+                    <h4 className="text-sm font-medium text-blue-800 mb-1">Informasi Kode Unik</h4>
                     <p className="text-xs text-blue-700">
-                      Total pembayaran Anda sudah dikurangi dengan angka unik sebesar{" "}
+                      Total pembayaran Anda sudah ditambahkan dengan kode unik sebesar{" "}
                       <span className="font-semibold">
                         Rp{" "}
                         {(
-                          registration.uniqueDeduction ||
-                          registration.notes?.match(/Unique Deduction: (\d+)/)?.[1] ||
+                          registration.uniqueAddition ||
+                          registration.unique_code ||
+                          registration.notes?.match(/Unique Code: \+(\d+)/)?.[1] ||
                           0
                         ).toLocaleString("id-ID")}
                       </span>{" "}
@@ -392,9 +393,10 @@ export function PaymentInstructions({ registrationId }: PaymentInstructionsProps
                       <span className="font-semibold">
                         Rp{" "}
                         {(
-                          paymentAmount +
-                          (registration.uniqueDeduction ||
-                            Number.parseInt(registration.notes?.match(/Unique Deduction: (\d+)/)?.[1] || "0"))
+                          paymentAmount -
+                          (registration.uniqueAddition ||
+                            registration.unique_code ||
+                            Number.parseInt(registration.notes?.match(/Unique Code: \+(\d+)/)?.[1] || "0"))
                         ).toLocaleString("id-ID")}
                       </span>
                       . Mohon transfer dengan jumlah yang tepat untuk memudahkan verifikasi otomatis.

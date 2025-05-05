@@ -230,28 +230,23 @@ export async function POST(request: Request) {
       }
     }
 
-    // Generate a unique payment identifier by SUBTRACTING a random value (1-100) from the total
+    // Generate a unique payment identifier by ADDING a random value (1-999) to the total
     // This ensures the amount is unique and can be easily identified in bank transactions
     // We'll check for collisions to make sure we don't generate the same unique amount for different registrations
 
-    let uniqueDeduction = 0
-    let uniqueFinalAmount = 0
     let isUniqueAmountAvailable = false
     let attempts = 0
     const maxAttempts = 50 // Limit attempts to prevent infinite loop
+    
+    // Random unique code to add to the total amount
+    let uniqueCode = 0
 
     while (!isUniqueAmountAvailable && attempts < maxAttempts) {
-      // Generate a random deduction between 1 and 100 (smaller range to minimize financial impact)
-      uniqueDeduction = Math.floor(Math.random() * 100) + 1
+      // Generate a random addition between 1 and 999 (small amount to add to the total)
+      uniqueCode = Math.floor(Math.random() * 999) + 1
 
-      // Calculate the unique final amount by SUBTRACTING the deduction
-      uniqueFinalAmount = finalAmount - uniqueDeduction
-
-      // Make sure the unique amount is positive
-      if (uniqueFinalAmount <= 0) {
-        uniqueDeduction = Math.floor(Math.random() * (finalAmount - 1)) + 1
-        uniqueFinalAmount = finalAmount - uniqueDeduction
-      }
+      // Calculate the unique final amount by ADDING the unique code
+      const uniqueFinalAmount = finalAmount + uniqueCode
 
       // Check if this unique amount is already used in the database
       const { data: existingPayments, error: checkError } = await supabase
@@ -276,7 +271,7 @@ export async function POST(request: Request) {
     }
 
     console.log(
-      `Generated unique payment amount: ${uniqueFinalAmount} (original: ${finalAmount}, deduction: ${uniqueDeduction})`
+      `Generated unique payment amount: ${finalAmount + uniqueCode} (original: ${finalAmount}, unique code: +${uniqueCode})`
     )
 
     // Periksa skema tabel registrations untuk mengetahui kolom yang tersedia
@@ -303,20 +298,17 @@ export async function POST(request: Request) {
     // Selalu tambahkan total_amount (sebelum deduction) dan final_amount (setelah deduction)
     const registrationData1 = {
       ...registrationBase,
-      total_amount: verifiedTotalAmount,    // Total cost before unique deduction
-      final_amount: uniqueFinalAmount,    // Amount to be paid after unique deduction
-    }
-
-    // Cek dan tambahkan kolom discount_amount jika ada
-    if (registrationColumns && Object.keys(registrationColumns).includes("discount_amount")) {
-      (registrationData1 as any)["discount_amount"] = discountAmount
+      total_amount: finalAmount,     // Total cost before unique code
+      discount_amount: discountAmount,
+      final_amount: finalAmount + uniqueCode, // Amount to be paid after adding unique code
+      unique_code: uniqueCode,       // Store the unique code in the registration
     }
 
     // Cek dan tambahkan kolom notes jika ada
     if (registrationColumns && Object.keys(registrationColumns).includes("notes")) {
       (registrationData1 as any)["notes"] = appliedPromoCode
-        ? `Promo: ${appliedPromoCode}, Unique Deduction: ${uniqueDeduction}`
-        : `Unique Deduction: ${uniqueDeduction}`
+        ? `Promo: ${appliedPromoCode}, Unique Code: +${uniqueCode}`
+        : `Unique Code: +${uniqueCode}`
     }
 
     console.log("Final registration data before insert:", registrationData1)
@@ -548,8 +540,8 @@ export async function POST(request: Request) {
       // Prepare arguments for the function call based on its definition
       const originalAmount = registrationData.totalAmount ?? 0;
       const discountAmount = registrationData.discount_amount ?? 0; // Assuming discount_amount is available or default to 0
-      const uniqueAmount = uniqueFinalAmount;
-      const uniqueDeduction = originalAmount - uniqueAmount;
+      const uniqueAmount = finalAmount + uniqueCode;
+      const uniqueAddition = uniqueAmount - originalAmount;
       const paymentType = "bank_transfer"; // Assuming bank transfer for now
       const originalParticipantsData = registrationData.participants ?? [];
 
@@ -559,7 +551,7 @@ export async function POST(request: Request) {
         registration.registration_number,    // registrationNumber: string
         originalAmount,                      // originalAmount: number
         discountAmount,                      // discountAmount: number
-        uniqueDeduction,                     // uniqueDeduction: number
+        uniqueAddition,                      // uniqueAddition: number
         paymentType,                         // paymentType: string
         originalParticipantsData             // originalParticipantsData: any[]
       ).catch(emailError => {
@@ -575,13 +567,13 @@ export async function POST(request: Request) {
     // Prepare payment data
     const paymentData = {
       status: "pending",
-      amount: uniqueFinalAmount,
+      amount: finalAmount + uniqueCode,
       payment_method: registrationData.payment_type === "sponsor" ? "sponsor" : "bank_transfer",
       registration_id: registrationId,
       notes:
         registrationData.payment_type === "sponsor"
           ? "Pembayaran sponsor"
-          : `Pembayaran mandiri (Unique Deduction: ${uniqueDeduction})`
+          : `Pembayaran mandiri (Unique Code: +${uniqueCode})`
       // check_attempts column has a default value of 0 in the database
     }
     
@@ -653,8 +645,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       registrationId: registrationId, // Ensure we return the correct ID
-      uniqueDeduction: uniqueDeduction,
-      uniqueAmount: uniqueFinalAmount,
+      uniqueAddition: uniqueCode,
+      uniqueAmount: finalAmount + uniqueCode,
       originalAmount: finalAmount,
     })
   } catch (error) {

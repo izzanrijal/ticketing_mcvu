@@ -67,7 +67,7 @@ interface GenerateInvoiceParams {
     paymentType: string;
     originalAmount: number;
     discountAmount: number;
-    uniqueDeduction: number;
+    uniqueAddition: number;
     uniqueAmount: number;
     participants: Participant[];
     ticketData: Ticket | null;
@@ -95,7 +95,7 @@ export async function sendRegistrationInvoice(
     registrationNumber: string, 
     originalAmount: number,
     discountAmount: number,
-    uniqueDeduction: number,
+    uniqueAddition: number,
     paymentType: string,
     originalParticipantsData: any[]
 ): Promise<void> {
@@ -230,7 +230,7 @@ export async function sendRegistrationInvoice(
         const originalAmount = fullRegistrationData.total_amount ?? 0;           // Get from registration data
         const discountAmount = fullRegistrationData.discount_amount ?? 0;        // Get from registration data
         const uniqueAmount = fullRegistrationData.final_amount ?? 0;            // Get from registration data
-        const uniqueDeduction = originalAmount - uniqueAmount;                 // Calculate deduction
+        const uniqueAddition = originalAmount - discountAmount - uniqueAmount;                 // Calculate addition
 
         // Ensure workshopDetailsMap is correctly populated (assuming fetch logic above is correct)
         // Ensure ticketData is correctly populated (assuming fetch logic above is correct)
@@ -257,7 +257,7 @@ export async function sendRegistrationInvoice(
         console.log('Payment Type:', paymentType); // Corrected
         console.log('Original Amount:', originalAmount, '(Type:', typeof originalAmount, ')'); // Corrected
         console.log('Discount Amount:', discountAmount, '(Type:', typeof discountAmount, ')'); // Corrected
-        console.log('Unique Deduction:', uniqueDeduction, '(Type:', typeof uniqueDeduction, ')'); // Corrected
+        console.log('Unique Addition:', uniqueAddition, '(Type:', typeof uniqueAddition, ')'); // Corrected
         console.log('Unique Amount:', uniqueAmount, '(Type:', typeof uniqueAmount, ')'); // Corrected
         console.log('Participants Array Length:', participantsWithAttendStatus.length);
         console.log('Participants Data:', JSON.stringify(participantsWithAttendStatus, null, 2));
@@ -278,7 +278,7 @@ export async function sendRegistrationInvoice(
             paymentType,
             originalAmount,
             discountAmount,
-            uniqueDeduction,
+            uniqueAddition,
             uniqueAmount,
             participants: participantsWithAttendStatus,
             ticketData,
@@ -333,7 +333,7 @@ function generateInvoiceHtml(params: GenerateInvoiceParams): string {
         paymentType,
         originalAmount,
         discountAmount,
-        uniqueDeduction,
+        uniqueAddition,
         uniqueAmount,
         participants, // Destructured here
         ticketData,
@@ -444,8 +444,8 @@ function generateInvoiceHtml(params: GenerateInvoiceParams): string {
                  </tr>
                  ` : ''}
                  <tr>
-                     <td>Kode Unik Pengurang:</td>
-                     <td style="padding-left: 15px;">- Rp ${(originalAmount - discountAmount - uniqueAmount).toLocaleString('id-ID')},-</td>
+                     <td>Kode Unik Tambah:</td>
+                     <td style="padding-left: 15px;">+ Rp ${Math.abs(uniqueAmount - (originalAmount - discountAmount)).toLocaleString('id-ID')},-</td>
                  </tr>
                  <tr style="border-top: 1px solid #ddd; font-size: 1.1em;">
                      <td style="padding-top: 8px; font-weight: bold;">Total Tagihan:</td>
@@ -557,7 +557,7 @@ export async function generateInvoicePdf(
         paymentType,
         originalAmount,
         discountAmount,
-        uniqueDeduction,
+        uniqueAddition,
         uniqueAmount,
         participants, // Destructured here
         ticketData,
@@ -825,10 +825,10 @@ export async function generateInvoicePdf(
         totalY = moveYDown(drawText('Diskon:', totalLabelX, totalY, defaultFontSize, false), lineSpacing);
         drawText(`- Rp ${formatCurrency(discountAmount)}`, totalValueX, totalY + lineSpacing, defaultFontSize, false, grayColor, 'right');
 
-        totalY = moveYDown(drawText('Kode Unik Pengurang:', totalLabelX, totalY, defaultFontSize, false), lineSpacing);
-        const actualUniqueDeduction = (originalAmount - discountAmount - uniqueAmount); // Calculate actual deduction
-        const displayDeduction = Math.abs(actualUniqueDeduction) < 0.01 ? 0 : actualUniqueDeduction;
-        drawText(`- Rp ${formatCurrency(displayDeduction)}`, totalValueX, totalY + lineSpacing, defaultFontSize, false, grayColor, 'right');
+        const actualUniqueAddition = (uniqueAmount - (originalAmount - discountAmount)); // Calculate correctly
+        const displayAddition = Math.abs(actualUniqueAddition) < 0.01 ? 0 : Math.abs(actualUniqueAddition); // Use absolute value
+        totalY = moveYDown(drawText('Kode Unik Tambah:', totalLabelX, totalY, defaultFontSize, false), lineSpacing);
+        drawText(`+ Rp ${formatCurrency(displayAddition)}`, totalValueX, totalY + lineSpacing, defaultFontSize, false, grayColor, 'right');
 
         totalY = moveYDown(totalY, lineSpacing * 0.5); // Space before line
         page.drawLine({ start: { x: totalLabelX - 10, y: totalY }, end: { x: width - rightMargin, y: totalY }, thickness: 1, color: grayColor });

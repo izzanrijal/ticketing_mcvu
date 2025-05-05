@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice Registrasi MCVU</title>
+    <style>
+        body { font-family: sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+        .container { max-width: 800px; margin: 20px auto; padding: 20px; border: 1px solid #eee; box-shadow: 0 0 10px rgba(0,0,0,0.05); }
+        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; }
+        .logo { width: 120px; height: auto; }
+        .invoice-title { text-align: right; }
+        .invoice-title h1 { margin: 0; font-size: 1.8em; color: #333; }
+        .invoice-details { text-align: right; }
+        .invoice-details p { margin: 2px 0; font-size: 0.95em; }
+        .status { color: #ff8000; font-weight: bold; }
+        .section { margin-bottom: 25px; }
+        .section h2 { font-size: 1.2em; margin-bottom: 10px; color: #333; }
+        .billing-info { margin-bottom: 20px; }
+        .billing-info p { margin: 2px 0; margin-left: 10px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 0.95em; }
+        thead { background-color: #f0f0f0; }
+        th, td { padding: 10px 5px; border-bottom: 1px solid #ddd; text-align: left; }
+        th { font-weight: bold; }
+        td.numeric, th.numeric { text-align: right; }
+        .summary-table { width: 100%; max-width: 400px; margin-left: auto; text-align: right; margin-bottom: 20px; }
+        .summary-table td { border: none; padding: 4px 0; }
+        .summary-table .divider { border-bottom: 1px solid #ddd; margin: 5px 0; }
+        .total-row { font-weight: bold; }
+        .payment-instructions { background-color: #f9f9f9; border: 1px solid #eee; padding: 15px; margin-top: 20px; }
+        .payment-instructions h2 { margin-top: 0; }
+        .payment-account { margin-left: 25px; }
+        .notes { font-size: 0.9em; }
+        .notes li { margin-bottom: 5px; }
+        .footer { text-align: center; margin-top: 30px; font-size: 0.9em; color: #777; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <img src="/assets/logo_invoice.png" alt="MAKASSAR CARDIOVASCULAR UPDATE - XXIII 2025" class="logo">
+            </div>
+            <div class="invoice-title">
+                <h1>INVOICE</h1>
+                <div class="invoice-details">
+                    <p>No: MCVU-69018651</p>
+                    <p>Tanggal Dibuat: 1 Mei 2025 15:10</p>
+                    <p>Batas Pembayaran: 3 Mei 2025 15:10</p>
+                    <p class="status">Status: Belum Lunas</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Ditagihkan Kepada:</h2>
+            <div class="billing-info">
+                <p>rhadiathul islamiah</p>
+                <p>rhadiathulislamiah@gmail.com</p>
+                <p>081342409185</p>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Rincian Pemesanan:</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th>Kategori Peserta</th>
+                        <th class="numeric">Harga (IDR)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>[EARLY-BIRD] MCVU XXIII 2025 Symposium</td>
+                        <td>Dokter Umum</td>
+                        <td class="numeric">Rp 600,000</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <table class="summary-table">
+                <tr>
+                    <td>Subtotal:</td>
+                    <td class="numeric">Rp 600,000</td>
+                </tr>
+                <tr>
+                    <td>Diskon:</td>
+                    <td class="numeric">- Rp 0</td>
+                </tr>
+                <tr>
+                    <td>Kode Unik Tambah:</td>
+                    <td class="numeric">+ Rp 989</td>
+                </tr>
+                <tr class="divider"></tr>
+                <tr class="total-row">
+                    <td>Total Tagihan:</td>
+                    <td class="numeric">Rp 600,989</td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="section payment-instructions">
+            <h2>Instruksi Pembayaran:</h2>
+            <p>Mohon transfer SEJUMLAH PERSIS: Rp 600,989</p>
+            <p>Batas Waktu Pembayaran: 3 Mei 2025 15:10</p>
+            <p>Ke Rekening Bank Bank BTN:</p>
+            <div class="payment-account">
+                <p><strong>No. Rek: 00077-01-50-014607-6</strong></p>
+                <p><strong>A/N: PERKI CABANG MAKASSAR</strong></p>
+            </div>
+        </div>
+
+        <div class="section notes">
+            <h2>Catatan:</h2>
+            <ul>
+                <li>Pastikan jumlah transfer sesuai hingga digit terakhir untuk verifikasi otomatis.</li>
+                <li>Pembayaran diverifikasi dalam 7x24 jam hari kerja.</li>
+                <li>Anda akan menerima email konfirmasi & tiket elektronik setelah pembayaran berhasil diverifikasi.</li>
+                <li>Hubungi panitia jika ada pertanyaan.</li>
+            </ul>
+        </div>
+
+        <div class="footer">
+            Panitia MVCU 2025 - Invoice ini sah tanpa tanda tangan.
+        </div>
+    </div>
+</body>
+</html>
