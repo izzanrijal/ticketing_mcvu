@@ -28,7 +28,7 @@ export function PaymentDetails({ registration }: PaymentDetailsProps) {
   // Get bank details from event_config
   const bankDetails = {
     bank_name: "Bank BTN",
-    account_number: "0077-01-50-01-50-014607-6",
+    account_number: "00077-01-30-000120-6",
     account_name: "PERKI CABANG MAKASSAR",
   }
 

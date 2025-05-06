@@ -349,12 +349,12 @@ export function PaymentInstructions({ registrationId }: PaymentInstructionsProps
                     <div>Bank BTN</div>
                     <div className="text-sm font-medium">Nomor Rekening</div>
                     <div className="flex items-center">
-                      0077-01-50-014607-6
+                      00077-01-30-000120-6
                       <Button
                         variant="ghost"
                         size="icon"
                         className="ml-2 h-6 w-6"
-                        onClick={() => copyToClipboard("0077-01-50-014607-6")}
+                        onClick={() => copyToClipboard("00077-01-30-000120-6")}
                       >
                         {copied ? <CheckCircle className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
                       </Button>

@@ -427,7 +427,7 @@ async function generatePaidInvoicePdf(params) {
   drawText(`Ke Rekening Bank Bank BTN:`, margin + 15, y);
   y -= lineHeight;
   
-  drawText(`No. Rek: 00077-01-50-014607-6`, margin + 25, y, { font: boldFont });
+  drawText(`No. Rek: 00077-01-30-000120-6`, margin + 25, y, { font: boldFont });
   y -= lineHeight;
   
   drawText(`A/N: PERKI CABANG MAKASSAR`, margin + 25, y, { font: boldFont });
