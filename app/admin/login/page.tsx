@@ -10,11 +10,11 @@ export const metadata: Metadata = {
   description: "Login admin untuk MCVU XXIII 2025",
 }
 
-export default async function AdminLoginPage({
-  searchParams,
-}: {
-  searchParams: { [key: string]: string | string[] | undefined }
+export default async function AdminLoginPage(props: {
+  searchParams: { error?: string | string[] | undefined; [key: string]: string | string[] | undefined }
 }) {
+  // Access searchParams after it has been fully resolved by Next.js
+  const { searchParams } = props;
   const supabase = await createServerSupabaseClient()
 
   // Check if user is already logged in
@@ -37,7 +37,15 @@ export default async function AdminLoginPage({
   }
 
   // Get error message from URL parameter
-  const errorType = searchParams.error as string | undefined
+  let errorType: string | undefined = undefined;
+  const errorParam = searchParams.error;
+  
+  if (typeof errorParam === 'string') {
+    errorType = errorParam;
+  } else if (Array.isArray(errorParam) && errorParam.length > 0 && typeof errorParam[0] === 'string') {
+    errorType = errorParam[0];
+  }
+
   let errorMessage: string | null = null
 
   if (errorType) {
