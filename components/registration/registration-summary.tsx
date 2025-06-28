@@ -109,7 +109,26 @@ export function RegistrationSummary({ registrationData, onConfirm, onBack, loadi
         // 5. Hitung diskon
         let discountAmount = 0
         if (promo) {
-          if (promo.discount_type === "percentage") {
+          if (promo.promo_logic_type === 'B6G1_SAME_CATEGORY' && ticket) {
+            // Group participants by category who attend symposium
+            const participantsByCategory = {}
+            registrationData.participants.forEach(p => {
+              if (p.attendSymposium) {
+                participantsByCategory[p.participant_type] = participantsByCategory[p.participant_type] || []
+                participantsByCategory[p.participant_type].push(p)
+              }
+            })
+
+            promo.eligible_categories?.forEach(cat => {
+              const count = participantsByCategory[cat]?.length || 0
+              const freeTickets = Math.floor(count / 6)
+              if (freeTickets > 0) {
+                const priceKey = `price_${cat}`
+                const catPrice = ticket[priceKey] || 0
+                discountAmount += freeTickets * catPrice
+              }
+            })
+          } else if (promo.discount_type === "percentage") {
             discountAmount = Math.round(totalAmount * (promo.discount_value / 100))
           } else {
             discountAmount = Math.min(promo.discount_value, totalAmount)

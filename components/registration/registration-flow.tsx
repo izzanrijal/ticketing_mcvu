@@ -183,16 +183,16 @@ export function RegistrationFlow() {
         }
         
         // Add JSON data as a string
-        formData.append('data', JSON.stringify({
-          registrationData: registrationDataCopy,
-          registrationNumber,
-          totalAmount,
-          turnstileToken, // Add the token here
-        }))
+        // Append registration data expected by backend
+        formData.append('registrationData', JSON.stringify(registrationDataCopy))
+        // Pass Turnstile/CAPTCHA token using expected field name
+        if (turnstileToken) {
+          formData.append('cf-turnstile-response', turnstileToken)
+        }
         
         // Add file separately if it exists
         if (registrationData.payment_type === "sponsor" && registrationData.sponsor_letter) {
-          formData.append('sponsor_letter', registrationData.sponsor_letter)
+          formData.append('sponsorLetter', registrationData.sponsor_letter)
         }
         
         const response = await fetch("/api/register", {

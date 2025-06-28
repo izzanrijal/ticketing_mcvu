@@ -134,7 +134,7 @@ export async function sendRegistrationInvoice(
             const originalParticipant = originalParticipantsData[index];
             return {
                 ...fp,
-                attendSymposium: originalParticipant?.attendSymposium ?? false // Add the flag back
+                attendSymposium: originalParticipant?.attendSymposium ?? true // Add the flag back
             };
         });
 

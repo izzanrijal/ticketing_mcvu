@@ -66,22 +66,22 @@ const PaymentSummary: React.FC<PaymentSummaryProps> = ({
 
   // Calculate final amount after discount
   useEffect(() => {
+    let calculatedDiscount = discount
     let final = totalAmount
 
-    // Apply promo discount if available
     if (appliedPromo) {
       if (appliedPromo.discount_type === "percentage") {
-        const discountAmount = totalAmount * (appliedPromo.discount_value / 100)
-        final = totalAmount - discountAmount
-        setDiscount(discountAmount)
-      } else {
-        final = totalAmount - appliedPromo.discount_value
-        setDiscount(appliedPromo.discount_value)
+        calculatedDiscount = Math.round(totalAmount * (appliedPromo.discount_value / 100))
+      } else if (appliedPromo.discount_type === "fixed") {
+        calculatedDiscount = appliedPromo.discount_value
       }
+      // For custom discount types (e.g. B6G1) we rely on the value returned by the API and stored in `discount` state
+      final = totalAmount - calculatedDiscount
     } else {
-      setDiscount(0)
+      calculatedDiscount = 0
     }
 
+    setDiscount(calculatedDiscount)
     setFinalAmount(Math.max(0, final))
   }, [totalAmount, appliedPromo])
 
@@ -135,7 +135,7 @@ const PaymentSummary: React.FC<PaymentSummaryProps> = ({
     setTotalAmount(total)
   }, [participants, ticketDetails, workshops])
 
-  // Apply promo code
+  // Apply promo code via secure backend endpoint
   async function applyPromoCode() {
     if (!promoCode) {
       setPromoError("Masukkan kode promo")
@@ -146,47 +146,36 @@ const PaymentSummary: React.FC<PaymentSummaryProps> = ({
     setPromoError("")
 
     try {
-      const { data, error } = await supabase
-        .from("promo_codes")
-        .select("*")
-        .eq("code", promoCode.toUpperCase())
-        .eq("is_active", true)
-        .single()
+      const response = await fetch("/api/validate-promo", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          code: promoCode.toUpperCase(),
+          participantTypes: participants.map((p) => p.participant_type),
+          totalAmount,
+        }),
+      })
 
-      if (error) throw error
+      const result = await response.json()
 
-      if (!data) {
-        setPromoError("Kode promo tidak valid")
+      if (!response.ok || !result.valid) {
+        setPromoError(result.message || "Kode promo tidak valid")
         return
       }
 
-      // Check if promo is expired
-      const now = new Date()
-      if (data.valid_until && new Date(data.valid_until) < now) {
-        setPromoError("Kode promo sudah berakhir")
-        return
-      }
+      // Apply promo from server response
+      setAppliedPromo(result.promo)
+      setDiscount(result.discount_amount)
+      setFinalAmount(result.final_amount)
 
-      // Check if promo has reached max usage
-      if (data.max_uses && data.used_count >= data.max_uses) {
-        setPromoError("Kode promo sudah mencapai batas penggunaan")
-        return
-      }
-
-      // Check participant type restriction if any
-      if (data.participant_type) {
-        // Check if any participant matches the required type
-        const hasMatchingParticipant = participants.some((p) => p.participant_type === data.participant_type)
-        if (!hasMatchingParticipant) {
-          setPromoError(`Kode promo hanya berlaku untuk peserta tipe ${data.participant_type}`)
-          return
-        }
-      }
-
-      setAppliedPromo(data)
       toast({
         title: "Promo berhasil diterapkan",
-        description: `${data.discount_type === "percentage" ? data.discount_value + "%" : "Rp " + data.discount_value.toLocaleString("id-ID")} diskon`,
+        description:
+          result.promo.discount_type === "percentage"
+            ? `${result.promo.discount_value}% diskon`
+            : `Rp ${result.discount_amount.toLocaleString("id-ID")} diskon`,
       })
 
       // Store the promo code in registration data
