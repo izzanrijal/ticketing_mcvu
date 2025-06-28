@@ -117,545 +117,444 @@ async function generateUniqueFinalAmount(
   }
 
   // If max attempts reached, throw an error or handle as needed
-  console.error("Max attempts reached for generating unique final amount.")
-  throw new Error("Could not generate a unique final amount after multiple attempts")
+  throw new Error(
+    `Could not find a unique final amount for base ${baseAmount} after ${maxAttempts} attempts.`
+  )
+}
+
+// Helper function to calculate "Buy 6, Get 1 Free" discount for same-category groups
+async function calculateB6G1Discount(
+  participants: any[],
+  promoDetails: any,
+  symposiumPrices: { [key: string]: number }
+): Promise<number> {
+  let totalDiscount = 0;
+  console.log("Running B6G1 discount calculation with:", {
+    participantCount: participants.length,
+    eligibleCategories: promoDetails.eligible_categories,
+    availablePrices: Object.keys(symposiumPrices)
+  });
+
+  // Debug: Log all participants to check their properties
+  console.log("All participants:", participants.map(p => ({
+    category: p.category,
+    symposium: p.symposium,
+    attendSymposium: p.attendSymposium
+  })));
+
+  // 1. Group participants by category, only including those attending the symposium
+  const participantsByCategory: { [key: string]: any[] } = {};
+  
+  // Process each participant
+  for (const p of participants) {
+    // Check if participant is attending symposium (check both properties)
+    const isAttendingSymposium = p.symposium === true || p.attendSymposium === true;
+    
+    if (isAttendingSymposium) {
+      // Initialize array for this category if it doesn't exist
+      if (!participantsByCategory[p.category]) {
+        participantsByCategory[p.category] = [];
+      }
+      
+      // Add participant to the category group
+      participantsByCategory[p.category].push(p);
+    }
+  }
+
+  console.log("Participants grouped by category:", 
+    Object.keys(participantsByCategory).map(cat => ({ 
+      category: cat, 
+      count: participantsByCategory[cat].length 
+    })));
+
+  // 2. Iterate over each category group
+  for (const category in participantsByCategory) {
+    // 3. Check if the category is eligible for the promotion
+    const isEligibleCategory = promoDetails.eligible_categories && 
+                             Array.isArray(promoDetails.eligible_categories) && 
+                             promoDetails.eligible_categories.includes(category);
+    
+    console.log(`Category ${category} eligible for promo: ${isEligibleCategory}`);
+    
+    if (isEligibleCategory) {
+      const categoryParticipants = participantsByCategory[category];
+      const participantCount = categoryParticipants.length;
+      console.log(`Category ${category} has ${participantCount} participants`);
+
+      // 4. Calculate how many groups of 6 exist
+      const numberOfDiscountableGroups = Math.floor(participantCount / 6);
+      console.log(`Number of discountable groups (6 participants each): ${numberOfDiscountableGroups}`);
+
+      if (numberOfDiscountableGroups > 0) {
+        // 5. Get the symposium price for this specific category
+        let priceForCategory = symposiumPrices[category];
+        
+        // Handle possible category name differences
+        if (!priceForCategory && category === 'general_practitioner') {
+          priceForCategory = symposiumPrices['general_doctor'];
+        }
+        
+        console.log(`Price for category ${category}: ${priceForCategory}`);
+        
+        if (priceForCategory) {
+          // 6. Add the discount for this category to the total
+          const categoryDiscount = numberOfDiscountableGroups * priceForCategory;
+          totalDiscount += categoryDiscount;
+          console.log(`Applied B6G1 discount for ${numberOfDiscountableGroups} group(s) in category '${category}'. Discount amount: ${categoryDiscount}`);
+        } else {
+          console.warn(`B6G1 Promo: Price not found for category '${category}'. Available categories: ${Object.keys(symposiumPrices).join(', ')}`);
+        }
+      }
+    } else {
+      console.log(`Category ${category} is not eligible for this promo. Eligible categories: ${promoDetails.eligible_categories?.join(', ') || 'none'}`);
+    }
+  }
+
+  console.log(`Total B6G1 discount calculated: ${totalDiscount}`);
+  return totalDiscount;
 }
 
 export async function POST(request: Request) {
   try {
-    // Gunakan supabaseAdmin yang sudah dikonfigurasi dengan service role key
-    const supabase = supabaseAdmin
+    const formData = await request.formData();
+    const registrationData = JSON.parse(formData.get("registrationData") as string);
+    const sponsorLetterFile = formData.get("sponsorLetter") as File | null;
+    const turnstileToken = formData.get("cf-turnstile-response") as string | null;
 
-    // Check if this is a multipart form request
-    const contentType = request.headers.get('content-type') || ''
-    
-    let registrationData: any
-    let registrationNumber: string
-    let totalAmount: number
-    let sponsorLetterFile: File | null = null
-    let turnstileToken: string | null = null // Variable to hold the token
-    
-    if (contentType.includes('multipart/form-data')) {
-      // Handle multipart form data
-      const formData = await request.formData()
-      
-      // Get JSON data
-      const jsonData = formData.get('data')
-      if (jsonData) {
-        const parsedData = JSON.parse(jsonData.toString())
-        registrationData = parsedData.registrationData
-        registrationNumber = parsedData.registrationNumber
-        totalAmount = parsedData.totalAmount
-        turnstileToken = parsedData.turnstileToken // Extract token
-      } else {
-        throw new Error('Missing required JSON data in form')
-      }
-      
-      // Get file
-      sponsorLetterFile = formData.get('sponsor_letter') as File | null
-    } else {
-      // Handle JSON data (for backward compatibility or direct JSON requests)
-      const jsonData = await request.json()
-      registrationData = jsonData.registrationData
-      registrationNumber = jsonData.registrationNumber
-      totalAmount = jsonData.totalAmount
-      turnstileToken = jsonData.turnstileToken // Extract token
+    // --- Step 0: Validate Turnstile Token ---
+    const isTokenValid = await validateTurnstileToken(turnstileToken);
+    if (!isTokenValid) {
+      return NextResponse.json(
+        { error: "Invalid CAPTCHA. Please try again." },
+        { status: 403 }
+      );
     }
 
-    // ---- Turnstile Validation ----
-    const isHuman = await validateTurnstileToken(turnstileToken);
-    if (!isHuman) {
-      console.warn("Turnstile validation failed for registration attempt.");
-      return NextResponse.json({ error: "Verifikasi CAPTCHA gagal. Mohon refresh halaman dan coba lagi." }, { status: 403 });
+    const {
+      participants: participantsData,
+      contact_person: contactPerson,
+      payment_type: paymentType,
+      promo_code: promoCode,
+    } = registrationData;
+
+    if (!participantsData || !Array.isArray(participantsData) || participantsData.length === 0) {
+      return NextResponse.json({ error: "Participant data is missing or empty." }, { status: 400 });
     }
-    // ---- End Turnstile Validation ----
+    if (!contactPerson || !contactPerson.email || !contactPerson.name || !contactPerson.phone_number) {
+      return NextResponse.json({ error: "Contact person details are incomplete." }, { status: 400 });
+    }
 
-    console.log("API received data (post-validation):", { registrationNumber, totalAmount })
-    console.log("Participant count:", registrationData.participants.length)
-
-    // Recalculate total amount to ensure accuracy
-    let recalculatedTotal = 0
-
-    // Pastikan ticket_id selalu tersedia
-    const ticketId = registrationData.ticket_id || "3d271769-9e63-4eab-aa6a-6d56c28d556f";
-    console.log("API using ticket ID:", ticketId);
-    
-    // Get ticket details
-    const { data: ticketData } = await supabase
+    // --- Step 1: Verify Prices and Calculate Total Amount ---
+    // Fetch ticket prices (symposium)
+    const { data: tickets, error: ticketsError } = await supabaseAdmin
       .from("tickets")
       .select("*")
-      .eq("id", ticketId)
-      .single()
+      .eq("includes_symposium", true)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    
+    if (ticketsError) throw new Error("Could not fetch symposium ticket prices from database.");
+    if (!tickets || tickets.length === 0) throw new Error("No active symposium ticket found.");
+    
+    const ticket = tickets[0];
+    console.log("Using symposium ticket:", { id: ticket.id, name: ticket.name });
+    
+    // Map ticket prices by category
+    const symposiumPrices: { [key: string]: number } = {
+      general_doctor: ticket.price_general_doctor,
+      specialist_doctor: ticket.price_specialist_doctor,
+      nurse: ticket.price_nurse,
+      student: ticket.price_student,
+      other: ticket.price_other
+    };
+    
+    console.log("Symposium prices by category:", symposiumPrices);
+    
+    // Fetch workshop prices
+    const { data: workshops, error: workshopsError } = await supabaseAdmin.from("workshops").select("*");
+    if (workshopsError) throw new Error("Could not fetch workshop prices from database.");
+    
+    const workshopPrices: { [key: string]: { id: string; name: string; price: number } } = {};
+    workshops.forEach(workshop => {
+      workshopPrices[workshop.id] = { 
+        id: workshop.id, 
+        name: workshop.title, 
+        price: workshop.price 
+      };
+    });
+    
+    console.log(`Loaded ${Object.keys(workshopPrices).length} workshops`);
 
-    // Get all workshop details
-    const allWorkshopIds = registrationData.participants.flatMap((p: any) => p.workshops || [])
-    let workshopDetails = []
-    if (allWorkshopIds.length > 0) {
-      const { data: workshops } = await supabase.from("workshops").select("*").in("id", allWorkshopIds)
-      workshopDetails = workshops || []
-    }
-
-    // Calculate total for each participant
-    for (const participant of registrationData.participants) {
-      // Add ticket price ONLY if symposium is selected
-      if (participant.attendSymposium === true && participant.participant_type && ticketData) {
-        const priceKey = `price_${participant.participant_type}`
-        if (ticketData[priceKey] !== undefined) {
-          recalculatedTotal += ticketData[priceKey]
+    let verifiedTotalAmount = 0;
+    
+    // Debug: Log participant data before calculating total
+    console.log("Calculating total for participants:", participantsData.map(p => ({
+      category: p.category,
+      symposium: p.symposium,
+      workshops: p.workshops
+    })));
+    
+    for (const participant of participantsData) {
+      // Handle symposium price
+      if (participant.symposium === true) {
+        // Get price for this category
+        let categoryPrice = symposiumPrices[participant.category];
+        
+        // Handle possible category name differences
+        if (!categoryPrice && participant.category === 'general_practitioner') {
+          categoryPrice = symposiumPrices['general_doctor'];
         }
-      }
-
-      // Add workshop prices
-      if (participant.workshops && participant.workshops.length > 0) {
-        participant.workshops.forEach((workshopId: any) => {
-          const workshop = workshopDetails.find((w) => w.id === workshopId)
-          if (workshop) {
-            recalculatedTotal += workshop.price
-          }
-        })
-      }
-    }
-
-    // Use recalculated total instead of provided total
-    const verifiedTotalAmount = recalculatedTotal
-    console.log("Recalculated total:", verifiedTotalAmount)
-
-    // Get promo code if provided
-    let discountAmount = 0
-    let finalAmount = verifiedTotalAmount
-    let appliedPromoCode = null
-
-    if (registrationData.promo_code) {
-      try {
-        // Get promo details
-        const { data: promoData } = await supabase
-          .from("promo_codes")
-          .select("*")
-          .eq("code", registrationData.promo_code)
-          .eq("is_active", true)
-          .single()
-
-        if (promoData) {
-          // Validate promo code
-          const now = new Date()
-          const isValid =
-            (!promoData.valid_from || new Date(promoData.valid_from) <= now) &&
-            (!promoData.valid_until || new Date(promoData.valid_until) >= now) &&
-            (!promoData.max_uses || promoData.used_count < promoData.max_uses)
-
-          if (isValid) {
-            // Calculate discount
-            if (promoData.discount_type === "percentage") {
-              discountAmount = Math.round(verifiedTotalAmount * (promoData.discount_value / 100))
-            } else {
-              discountAmount = promoData.discount_value
-            }
-
-            finalAmount = Math.max(0, verifiedTotalAmount - discountAmount)
-            appliedPromoCode = promoData.code
-
-            // Increment usage count
-            await supabase
-              .from("promo_codes")
-              .update({ used_count: promoData.used_count + 1 })
-              .eq("id", promoData.id)
-
-            console.log(`Applied promo code ${registrationData.promo_code}: discount ${discountAmount}`)
-          }
-        }
-      } catch (promoError) {
-        console.error("Error applying promo code:", promoError)
-        // Continue with registration even if promo code fails
-      }
-    }
-
-    // Generate unique final amount
-    finalAmount = await generateUniqueFinalAmount(finalAmount)
-
-    // Periksa skema tabel registrations untuk mengetahui kolom yang tersedia
-    let registrationColumns = null
-    try {
-      const { data, error } = await supabase.from("registrations").select("*").limit(1)
-      if (!error && data && data.length > 0) {
-        registrationColumns = data[0]
-        console.log("Registration table columns:", Object.keys(registrationColumns))
-      }
-    } catch (schemaError) {
-      console.error("Error fetching registration schema:", schemaError)
-    }
-
-    // Buat objek dasar untuk registrasi
-    const mcvuNumber = Math.floor(10000000 + Math.random() * 90000000).toString()
-    const registrationBase = {
-      registration_number: `MCVU-${mcvuNumber}`,
-      status: "pending",
-      ticket_id: ticketId // Add ticket ID here
-    }
-
-    // Tambahkan kolom opsional jika ada dalam skema
-    // Selalu tambahkan total_amount (sebelum deduction) dan final_amount (setelah deduction)
-    const registrationData1 = {
-      ...registrationBase,
-      total_amount: verifiedTotalAmount,     // Total cost before discount/unique addition
-      discount_amount: discountAmount,
-      final_amount: finalAmount, // Use the unique final amount
-    }
-
-    // Cek dan tambahkan kolom notes jika ada
-    if (registrationColumns && Object.keys(registrationColumns).includes("notes")) {
-      (registrationData1 as any)["notes"] = appliedPromoCode
-        ? `Promo: ${appliedPromoCode}, Unique Code: +${finalAmount - verifiedTotalAmount}`
-        : `Unique Code: +${finalAmount - verifiedTotalAmount}`
-    }
-
-    console.log("Final registration data before insert:", registrationData1)
-
-    // --- Step 1: Create Registration Record --- 
-    console.log("Attempting to insert registration record...")
-
-    const { data: registration, error: registrationError } = await supabase
-      .from("registrations")
-      .insert(registrationData1) // Insert without participant_ids
-      .select()
-      .single()
-
-    if (registrationError) {
-      console.error("Server registration error:", registrationError)
-      return NextResponse.json(
-        { error: "Failed to create registration: " + registrationError.message },
-        { status: 500 },
-      )
-    }
-
-    const registrationId = registration.id
-    console.log("Registration created successfully with ID:", registrationId)
-
-    // --- Step 2: Create Participant Records and link to Registration --- 
-    const participantOrderItems: { participant_id: string, items: any[] }[] = []; // Store item details per participant
-    const createdParticipantIds: string[] = []
-
-    // Fallback if participants array is missing or empty (use contact person)
-    if (!registrationData.participants || !Array.isArray(registrationData.participants) || registrationData.participants.length === 0) {
-      console.warn("Invalid or empty participants array, using contact person as default participant.")
-      registrationData.participants = [{
-        full_name: registrationData.contact_person?.name || "Unnamed Participant",
-        email: registrationData.contact_person?.email || "",
-        phone: registrationData.contact_person?.phone || "",
-        nik: "", // NIK is required, but we might not have it for contact person
-        participant_type: "other",
-        institution: "",
-        workshops: [],
-        attendSymposium: true, // Assume contact person attends symposium if no participant data
-        ewaco_interest: false
-      }]
-    }
-
-    for (const participantInput of registrationData.participants) {
-      try {
-        const participantName = participantInput.full_name || registrationData.contact_person?.name || "Unnamed Participant"
-        const participantData: any = {
-          full_name: participantName,
-          email: participantInput.email || registrationData.contact_person?.email || "",
-          phone: participantInput.phone || registrationData.contact_person?.phone || "",
-          nik: participantInput.nik || "", // Handle potentially missing NIK
-          participant_type: participantInput.participant_type || "other",
-          institution: participantInput.institution || "",
-          ewaco_interest: participantInput.ewaco_interest || false,
-          registration_id: registrationId
-        }
-
-        console.log("Attempting to insert participant with data:", JSON.stringify(participantData))
-        const { data: createdParticipant, error: participantError } = await supabase
-          .from("participants")
-          .insert(participantData)
-          .select()
-          .single() // Assume insert returns the created record
-
-        if (participantError) {
-          console.error("Error creating participant:", participantError)
-          // Consider how to handle partial failure - rollback?
-          // For now, we log and continue, but this might leave orphaned registrations
-          continue // Skip to the next participant
-        }
-
-        if (!createdParticipant) {
-          console.error("Participant insert did not return data for:", participantName);
-          continue; // Skip if insertion failed silently
-        }
-
-        console.log(`Participant ${createdParticipant.full_name} created with ID: ${createdParticipant.id}`)
-        createdParticipantIds.push(createdParticipant.id)
-
-        // --- Generate and store QR Code --- 
-        try {
-          const qrCodeId = generateQRCodeId(); // Assume this function exists
-          const { error: qrError } = await supabase.from("participant_qr_codes").insert({
-            participant_id: createdParticipant.id,
-            registration_id: registrationId, // Ensure registration_id is included
-            qr_code_id: qrCodeId,
-          });
-
-          if (qrError) {
-            console.error(`Error creating QR code record for participant ${createdParticipant.id}:`, qrError);
-          } else {
-            // Assuming async image generation/upload
-            generateAndStoreQRCodeImage(qrCodeId, createdParticipant.id, registrationId, supabase)
-              .catch(imgError => {
-                console.error(`Error generating/storing QR code image for ${createdParticipant.id}:`, imgError);
-              });
-          }
-        } catch (qrSetupError) {
-          console.error(`Exception during QR Code setup for participant ${createdParticipant.id}:`, qrSetupError);
-        }
-        // --- End QR Code --- 
-
-        // --- Construct item list for this participant (for order_details JSON) --- 
-        const currentParticipantItems: any[] = [];
-        // Add symposium ticket if attending
-        if (participantInput.attendSymposium === true && ticketData) {
-          const priceKey = `price_${createdParticipant.participant_type}`;
-          const symposiumPrice = ticketData[priceKey] !== undefined ? ticketData[priceKey] : 0;
-          if (symposiumPrice > 0) { // Only add if price is valid
-            currentParticipantItems.push({
-              type: 'symposium',
-              id: ticketData.id,
-              name: ticketData.name,
-              amount: symposiumPrice
-            });
-          }
-        }
-
-        // Add workshops
-        if (participantInput.workshops && Array.isArray(participantInput.workshops) && participantInput.workshops.length > 0) {
-          for (const workshopId of participantInput.workshops) {
-            const workshop = workshopDetails.find((w: any) => w.id === workshopId)
-            if (workshop && workshop.price > 0) { // Ensure workshop exists and has price
-              currentParticipantItems.push({
-                type: 'workshop',
-                id: workshop.id,
-                name: workshop.title, // Use workshop.title instead of workshop.name
-                amount: workshop.price
-              });
-
-              // Also create the workshop_registrations record
-              const { error: workshopRegError } = await supabase
-                .from("workshop_registrations")
-                .insert({ 
-                  participant_id: createdParticipant.id, 
-                  workshop_id: workshopId,
-                  registration_id: registrationId // <<< Fix: Add registration_id
-                })
-              if (workshopRegError) {
-                console.error(`Error linking participant ${createdParticipant.id} to workshop ${workshopId}:`, workshopRegError)
-              }
-            }
-          }
-        }
-
-        // Add this participant's items to the main list (for order_details JSON)
-        participantOrderItems.push({
-          participant_id: createdParticipant.id,
-          items: currentParticipantItems
-        });
-        // --- End item list construction ---
-      } catch (innerError) {
-        console.error(`Error processing participant ${participantInput.full_name || 'unknown'}:`, innerError)
-        // Decide if registration should fail completely
-      }
-    }
-
-    // --- Step 3: Update Registration with Participant IDs and Order Details JSON --- 
-    const orderDetailsJson = { participants: participantOrderItems };
-    console.log("Updating registration with Participant IDs and Order Details:", createdParticipantIds, JSON.stringify(orderDetailsJson));
-
-    // First update just the participant_ids (this is critical and we'll wait for it)
-    const { error: updateParticipantIdsError } = await supabase
-      .from("registrations")
-      .update({ participant_ids: createdParticipantIds })
-      .eq("id", registrationId)
-
-    if (updateParticipantIdsError) {
-      console.error("Error updating registration with participant IDs:", updateParticipantIdsError)
-      // This is critical, so we'll return an error
-      return NextResponse.json(
-        { error: "Failed to update registration with participant IDs" },
-        { status: 500 }
-      )
-    }
-
-    // Then update the order_details asynchronously (fire and forget)
-    // We don't need to wait for this to complete before returning the response
-    (async () => {
-      try {
-        const result = await supabase
-          .from("registrations")
-          .update({ order_details: orderDetailsJson })
-          .eq("id", registrationId);
-          
-        if (result.error) {
-          console.error("Error updating registration with order details:", result.error);
+        
+        if (categoryPrice) {
+          verifiedTotalAmount += categoryPrice;
+          console.log(`Added symposium price for ${participant.category}: ${categoryPrice}`);
         } else {
-          console.log("Successfully updated registration with order details");
+          console.warn(`No symposium price found for category: ${participant.category}`);
         }
-      } catch (error) {
-        console.error("Exception during async order_details update:", error);
       }
-    })(); // Execute immediately but don't await
-
-    // --- Step 4: Create Contact Person Record --- 
-    const contactPersonFromRequest = registrationData.contact_person;
-    if (contactPersonFromRequest && contactPersonFromRequest.email) {
-      console.log(`Attempting to insert contact person data for registration ${registrationId}...`);
-      const { data: contactPersonData, error: contactPersonError } = await supabaseAdmin
-        .from('contact_persons')
-        .insert({
-          registration_id: registrationId,
-          name: contactPersonFromRequest.name,
-          email: contactPersonFromRequest.email,
-          phone: contactPersonFromRequest.phone,
-        })
-        .select()
-        .single();
-
-      if (contactPersonError) {
-        console.error(`Error inserting contact person for registration ${registrationId}:`, contactPersonError);
-        // Decide if this should be a critical error or just logged
-        // For now, log and continue, email might still fail later
-      } else {
-        console.log(`Contact person inserted successfully for registration ${registrationId}:`, contactPersonData);
+      
+      // Handle workshop prices
+      if (participant.workshops && Array.isArray(participant.workshops)) {
+        for (const workshopId of participant.workshops) {
+          const workshopPrice = workshopPrices[workshopId]?.price || 0;
+          verifiedTotalAmount += workshopPrice;
+          console.log(`Added workshop price for ${workshopId}: ${workshopPrice}`);
+        }
       }
-    } else {
-      console.log(`No contact person data provided in request for registration ${registrationId}, skipping insert.`);
-    }
-
-    // --- Send registration invoice email asynchronously ---
-    // Check again if contact person email exists before sending
-    if (contactPersonFromRequest && contactPersonFromRequest.email) {
-      const recipientEmail = contactPersonFromRequest.email;
-      console.log(`Attempting to send invoice to contact person: ${recipientEmail} for registration ${registrationId}`);
-
-      // Prepare arguments for the function call based on its definition
-      const originalAmount = registrationData.totalAmount ?? 0;
-      const discountAmount = registrationData.discount_amount ?? 0; // Assuming discount_amount is available or default to 0
-      const uniqueAmount = finalAmount;
-      const uniqueAddition = uniqueAmount - originalAmount;
-      const paymentType = "bank_transfer"; // Assuming bank transfer for now
-      const originalParticipantsData = registrationData.participants ?? [];
-
-      // Fire-and-forget: Don't await this promise. Call with individual arguments.
-      sendRegistrationInvoice(
-        registrationId,                      // registrationId: string
-        registration.registration_number,    // registrationNumber: string
-        originalAmount,                      // originalAmount: number
-        discountAmount,                      // discountAmount: number
-        uniqueAddition,                      // uniqueAddition: number
-        paymentType,                         // paymentType: string
-        originalParticipantsData             // originalParticipantsData: any[]
-      ).catch(emailError => {
-        // Log error if sending email fails, but don't block response
-        console.error(`Error sending registration invoice for ${registrationId} to ${recipientEmail}:`, emailError);
-      });
-      console.log(`Initiated async invoice email send for registration ${registrationId} to ${recipientEmail}`);
-    } else {
-      console.warn(`No valid contact_person with email found in registrationData for ${registrationId}, skipping invoice email.`);
-    }
-
-    // --- Step 5: Create Payment Record --- 
-    // Prepare payment data
-    const paymentData = {
-      status: "pending",
-      amount: finalAmount,
-      payment_method: registrationData.payment_type === "sponsor" ? "sponsor" : "bank_transfer",
-      registration_id: registrationId,
-      notes:
-        registrationData.payment_type === "sponsor"
-          ? "Pembayaran sponsor"
-          : `Pembayaran mandiri (Unique Code: +${finalAmount - verifiedTotalAmount})`
-      // check_attempts column has a default value of 0 in the database
     }
     
-    // Handle file upload if present
-    if (sponsorLetterFile && registrationData.payment_type === "sponsor") {
-      try {
-        // Upload file to Supabase storage
-        // Create the filename with standardized format: MCVU-64602088-sponsorship-letter.pdf
-        const fileExtension = sponsorLetterFile.name.split('.').pop() || 'pdf';
-        const fileName = `${registrationNumber}-sponsorship-letter.${fileExtension}`
-        
-        // Convert file to arrayBuffer for upload
-        const arrayBuffer = await sponsorLetterFile.arrayBuffer()
-        const fileBuffer = new Uint8Array(arrayBuffer)
-        
-        const { data: uploadData, error: uploadError } = await supabase
-          .storage
-          .from('Sponsor Letters')
-          .upload(fileName, fileBuffer, {
-            contentType: 'application/pdf'
-          })
-          
-        if (uploadError) {
-          console.error("File upload error:", uploadError)
-        } else {
-          // Get the public URL for the uploaded file
-          const { data: publicUrlData } = supabase
-            .storage
-            .from('Sponsor Letters')
-            .getPublicUrl(fileName);
+    console.log(`Total verified amount before discount: ${verifiedTotalAmount}`);
 
-          // Update registration with both path and URL
-          await supabase
-            .from('registrations')
-            .update({ 
-              sponsor_letter_path: uploadData.path,
-              sponsor_letter_url: publicUrlData.publicUrl
-            })
-            .eq('id', registrationId)
-            
-          console.log("Sponsor letter uploaded successfully:", {
-            path: uploadData.path,
-            url: publicUrlData.publicUrl
-          })
-        }
-      } catch (fileError) {
-        console.error("Error processing sponsor letter:", fileError)
-        // Continue with registration even if file upload fails
+    // --- Step 2: Handle Promo Code ---
+    let promoDiscount = 0;
+    let promoId: string | null = null;
+
+    if (promoCode) {
+      console.log(`Processing promo code: ${promoCode}`);
+      
+      // Fetch promo code details
+      const { data: promo, error: promoError } = await supabaseAdmin
+        .from("promo_codes")
+        .select("id, code, discount_type, discount_value, max_uses, used_count, promo_logic_type, valid_from, valid_until, eligible_categories")
+        .eq("code", promoCode)
+        .single();
+
+      if (promoError || !promo) {
+        console.error("Promo code error:", promoError);
+        return NextResponse.json({ error: "Invalid promo code." }, { status: 400 });
+      }
+
+      console.log("Found promo code:", {
+        id: promo.id,
+        code: promo.code,
+        type: promo.discount_type,
+        value: promo.discount_value,
+        logic: promo.promo_logic_type,
+        maxUses: promo.max_uses,
+        usedCount: promo.used_count,
+        validFrom: promo.valid_from,
+        validUntil: promo.valid_until,
+        eligibleCategories: promo.eligible_categories
+      });
+
+      // Check usage limits
+      if (promo.max_uses !== null && promo.used_count >= promo.max_uses) {
+        return NextResponse.json({ 
+          error: `Promo code has reached its maximum usage limit (${promo.max_uses}).` 
+        }, { status: 400 });
+      }
+
+      // Check validity period
+      const now = new Date();
+      if (promo.valid_from && new Date(promo.valid_from) > now) {
+        return NextResponse.json({ 
+          error: `Promo code is not yet active. Valid from ${new Date(promo.valid_from).toLocaleDateString()}.` 
+        }, { status: 400 });
+      }
+      if (promo.valid_until && new Date(promo.valid_until) < now) {
+        return NextResponse.json({ 
+          error: `Promo code has expired on ${new Date(promo.valid_until).toLocaleDateString()}.` 
+        }, { status: 400 });
+      }
+
+      // Apply discount based on promo type
+      if (promo.promo_logic_type === 'B6G1_SAME_CATEGORY') {
+        // Normalize participant data to ensure consistent property names
+        const normalizedParticipants = participantsData.map(p => {
+          // Log original participant data
+          console.log(`Original participant data:`, {
+            id: p.id,
+            category: p.category,
+            symposium: p.symposium,
+            attendSymposium: p.attendSymposium
+          });
+          
+          return {
+            ...p,
+            // Ensure we have a consistent property for symposium attendance
+            // and make sure it's a boolean value
+            symposium: p.symposium === true || p.attendSymposium === true,
+            attendSymposium: p.symposium === true || p.attendSymposium === true,
+            // Ensure category is properly set
+            category: p.category || 'general_doctor'
+          };
+        });
+        
+        // Log normalized participants
+        console.log(`Normalized ${normalizedParticipants.length} participants for B6G1 calculation`);
+        
+        promoDiscount = await calculateB6G1Discount(normalizedParticipants, promo, symposiumPrices);
+        console.log(`B6G1 promo discount calculated: ${promoDiscount}`);
+      } else if (promo.discount_type === 'percentage' && promo.discount_value) {
+        promoDiscount = (verifiedTotalAmount * promo.discount_value) / 100;
+        console.log(`Percentage discount (${promo.discount_value}%): ${promoDiscount}`);
+      } else if (promo.discount_type === 'fixed' && promo.discount_value) {
+        promoDiscount = Math.min(verifiedTotalAmount, promo.discount_value);
+        console.log(`Fixed discount: ${promoDiscount}`);
+      }
+
+      if (promoDiscount > 0) {
+        promoId = promo.id;
+        console.log(`Applied promo ${promo.code} with discount: ${promoDiscount}`);
+      } else if (promo.promo_logic_type === 'B6G1_SAME_CATEGORY') {
+        return NextResponse.json({ 
+          error: "Promo code is valid, but the conditions for the discount are not met. This promo requires at least 6 participants from the same eligible category attending the symposium." 
+        }, { status: 400 });
       }
     }
 
-    console.log("Creating payment with data:", paymentData)
+    // --- Step 3: Calculate Final Amount and Generate Unique Code ---
+    let finalAmount = Math.max(0, verifiedTotalAmount - promoDiscount);
+    const uniqueAddition = (paymentType === "bank_transfer" && finalAmount > 0) ? (await generateUniqueFinalAmount(finalAmount)) - finalAmount : 0;
+    finalAmount += uniqueAddition;
+    
+    // --- Step 4: Create Registration Record ---
+    const { data: registration, error: registrationError } = await supabaseAdmin
+      .from("registrations")
+      .insert({
+        total_amount: verifiedTotalAmount,
+        discount_amount: promoDiscount,
+        final_amount: finalAmount,
+        payment_type: paymentType,
+        status: "pending",
+        contact_person: contactPerson,
+        promo_code_id: promoId,
+      })
+      .select()
+      .single();
 
-    // Create payment record with the unique amount
-    const { data: payment, error: paymentError } = await supabase.from("payments").insert(paymentData).select().single()
+    if (registrationError) throw registrationError;
+    const registrationId = registration.id;
+    const registrationNumber = registration.registration_number;
 
-    if (paymentError) {
-      console.error("Payment error:", paymentError)
-      return NextResponse.json(
-        { error: "Failed to create payment: " + paymentError.message },
-        { status: 500 }
-      )
-    } else {
-      // Schedule payment check for this registration
-      // This will start a timer to check for payment every 5 minutes
-      await schedulePaymentCheck(registrationId)
+    // --- Step 5: Create Participant and Ticket Records ---
+    const participantOrderItems: { participant_id: string, items: any[] }[] = [];
+    const createdParticipantIds: string[] = [];
+
+    for (const participantInput of participantsData) {
+        const { data: createdParticipant, error: participantError } = await supabaseAdmin
+          .from("participants")
+          .insert({ ...participantInput, registration_id: registrationId })
+          .select("id")
+          .single();
+
+        if (participantError) {
+            console.error(`Error inserting participant ${participantInput.full_name}:`, participantError);
+            continue;
+        }
+        createdParticipantIds.push(createdParticipant.id);
+
+        // QR Code Generation
+        const qrCodeId = generateQRCodeId();
+        await supabaseAdmin.from("participant_qr_codes").insert({ id: qrCodeId, participant_id: createdParticipant.id, registration_id: registrationId, status: 'active' });
+        generateAndStoreQRCodeImage(qrCodeId, createdParticipant.id, registrationId, supabaseAdmin);
+
+        // Construct Order Details
+        const currentParticipantItems: any[] = [];
+        if (participantInput.symposium) {
+            currentParticipantItems.push({ type: 'symposium', name: 'Symposium Ticket', amount: symposiumPrices[participantInput.category] });
+        }
+        if (participantInput.workshops) {
+            for (const wsId of participantInput.workshops) {
+                const workshop = workshopPrices[wsId];
+                if (workshop) currentParticipantItems.push({ type: 'workshop', id: wsId, name: workshop.name, amount: workshop.price });
+            }
+        }
+        participantOrderItems.push({ participant_id: createdParticipant.id, items: currentParticipantItems });
     }
 
+    // --- Step 6: Update Registration with Participant IDs and Order Details ---
+    const orderDetailsJson = { participants: participantOrderItems };
+    await supabaseAdmin.from('registrations').update({ participant_ids: createdParticipantIds, order_details: orderDetailsJson }).eq('id', registrationId);
+
+    // --- Step 7: Increment Promo Code Usage ---
+    if (promoId) {
+      console.log(`Incrementing usage count for promo ID: ${promoId}`);
+      
+      // Try using the RPC function first
+      const { error: rpcError } = await supabaseAdmin.rpc('increment_promo_uses', { promo_id_to_inc: promoId });
+      
+      if (rpcError) {
+        console.warn(`RPC increment_promo_uses failed: ${rpcError.message}. Falling back to direct update.`);
+        
+        // Fallback: Direct update if RPC fails
+        const { error: updateError } = await supabaseAdmin
+          .from('promo_codes')
+          .update({ used_count: supabaseAdmin.rpc('increment', { count: 1 }) })
+          .eq('id', promoId);
+        
+        if (updateError) {
+          console.error(`Failed to increment promo usage via direct update: ${updateError.message}`);
+        } else {
+          console.log(`Successfully incremented promo usage via direct update`);
+        }
+      } else {
+        console.log(`Successfully incremented promo usage via RPC`);
+      }
+    }
+    
+    // --- Step 8: Handle Sponsor Letter Upload ---
+    if (sponsorLetterFile && paymentType === "sponsor") {
+        const fileExtension = sponsorLetterFile.name.split('.').pop() || 'pdf';
+        const fileName = `${registrationNumber}-sponsorship-letter.${fileExtension}`;
+        const { data: uploadData, error: uploadError } = await supabaseAdmin.storage.from('Sponsor Letters').upload(fileName, await sponsorLetterFile.arrayBuffer(), { contentType: 'application/pdf' });
+        if (!uploadError) {
+            const { data: publicUrlData } = supabaseAdmin.storage.from('Sponsor Letters').getPublicUrl(fileName);
+            await supabaseAdmin.from('registrations').update({ sponsor_letter_path: uploadData.path, sponsor_letter_url: publicUrlData.publicUrl }).eq('id', registrationId);
+        }
+    }
+
+    // --- Step 9: Create Payment Record and Schedule Check ---
+    const { error: paymentError } = await supabaseAdmin.from("payments").insert({ 
+        status: "pending", 
+        amount: finalAmount, 
+        payment_method: paymentType === "sponsor" ? "sponsor" : "bank_transfer", 
+        registration_id: registrationId, 
+        notes: paymentType === "sponsor" ? "Pembayaran sponsor" : `Pembayaran mandiri (Unique Code: +${uniqueAddition.toFixed(0)})`
+    });
+    if (paymentError) throw paymentError;
+    await schedulePaymentCheck(registrationId);
+
+    // --- Step 10: Send Invoice ---
+    if (contactPerson.email) {
+      sendRegistrationInvoice(registrationId, contactPerson.email).catch(console.error);
+    }
+
+    // --- Final Response ---
     return NextResponse.json({
       success: true,
-      registrationId: registrationId, // Ensure we return the correct ID
-      uniqueAddition: finalAmount - verifiedTotalAmount,
+      registrationId: registrationId,
+      uniqueAddition: uniqueAddition,
       uniqueAmount: finalAmount,
       originalAmount: verifiedTotalAmount,
-    })
+    });
+
   } catch (error) {
-    console.error("Server error:", error)
-    // Always return a proper JSON response, even for errors
+    console.error("Server error:", error);
     return NextResponse.json({ 
       error: "Internal server error: " + (error instanceof Error ? error.message : String(error)) 
     }, { 
       status: 500,
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    })
+    });
   }
 }

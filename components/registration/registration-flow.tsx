@@ -607,23 +607,61 @@ const PaymentSummary = ({
   // Add this useEffect to calculate the final amount after discount
   useEffect(() => {
     let final = totalAmount
+    let discountAmount = 0
 
     // Apply promo discount if available
     if (appliedPromo) {
-      if (appliedPromo.discount_type === "percentage") {
-        const discountAmount = totalAmount * (appliedPromo.discount_value / 100)
-        final = totalAmount - discountAmount
-        setDiscount(discountAmount)
-      } else {
-        final = totalAmount - appliedPromo.discount_value
-        setDiscount(appliedPromo.discount_value)
+      console.log("Calculating discount for promo:", appliedPromo)
+      
+      // Special handling for B6G1 promo
+      if (appliedPromo.promo_logic_type === 'B6G1_SAME_CATEGORY' && ticketDetails) {
+        // Group participants by category who are attending symposium
+        const participantsByCategory = {}
+        participants.forEach(p => {
+          if (p.attendSymposium) {
+            participantsByCategory[p.participant_type] = participantsByCategory[p.participant_type] || []
+            participantsByCategory[p.participant_type].push(p)
+          }
+        })
+        
+        console.log("B6G1 calculation - Participants by category:", participantsByCategory)
+        
+        // Calculate discount for each eligible category
+        for (const category of (appliedPromo.eligible_categories || [])) {
+          const count = participantsByCategory[category]?.length || 0
+          const freeTickets = Math.floor(count / 6)
+          
+          if (freeTickets > 0) {
+            // Get price for this category
+            const priceKey = `price_${category}`
+            const categoryPrice = ticketDetails[priceKey] || 0
+            
+            // Add to total discount
+            const categoryDiscount = freeTickets * categoryPrice
+            discountAmount += categoryDiscount
+            
+            console.log(`B6G1 discount for ${category}: ${freeTickets} free tickets = ${categoryDiscount}`);
+          }
+        }
       }
+      // Standard percentage discount
+      else if (appliedPromo.discount_type === "percentage") {
+        discountAmount = totalAmount * (appliedPromo.discount_value / 100)
+      }
+      // Standard fixed discount
+      else if (appliedPromo.discount_type === "fixed") {
+        discountAmount = appliedPromo.discount_value
+      }
+      
+      final = totalAmount - discountAmount
+      setDiscount(discountAmount)
+      console.log(`Applied discount: ${discountAmount}, Final amount: ${final}`)
     } else {
       setDiscount(0)
     }
 
     setFinalAmount(Math.max(0, final))
-  }, [totalAmount, appliedPromo])
+  }, [totalAmount, appliedPromo, participants, ticketDetails])
 
   useEffect(() => {
     async function fetchData() {
@@ -682,6 +720,7 @@ const PaymentSummary = ({
     setPromoError("")
 
     try {
+      // Get promo code details from database
       const { data, error } = await supabase
         .from("promo_codes")
         .select("*")
@@ -689,15 +728,25 @@ const PaymentSummary = ({
         .eq("is_active", true)
         .single()
 
-      if (error) throw error
+      if (error) {
+        console.error("Database error fetching promo:", error)
+        throw new Error("Kode promo tidak valid")
+      }
 
       if (!data) {
         setPromoError("Kode promo tidak valid")
         return
       }
 
+      console.log("Promo code found:", data)
+
       // Check if promo is expired
       const now = new Date()
+      if (data.valid_from && new Date(data.valid_from) > now) {
+        setPromoError("Kode promo belum berlaku")
+        return
+      }
+      
       if (data.valid_until && new Date(data.valid_until) < now) {
         setPromoError("Kode promo sudah berakhir")
         return
@@ -709,8 +758,42 @@ const PaymentSummary = ({
         return
       }
 
-      // Check participant type restriction if any
-      if (data.participant_type) {
+      // Special handling for B6G1 promo
+      if (data.promo_logic_type === 'B6G1_SAME_CATEGORY') {
+        // Check if we have eligible categories
+        if (!data.eligible_categories || !Array.isArray(data.eligible_categories) || data.eligible_categories.length === 0) {
+          setPromoError("Kode promo tidak memiliki kategori yang valid")
+          return
+        }
+
+        // Group participants by category who are attending symposium
+        const participantsByCategory = {}
+        participants.forEach(p => {
+          if (p.attendSymposium) {
+            participantsByCategory[p.participant_type] = participantsByCategory[p.participant_type] || []
+            participantsByCategory[p.participant_type].push(p)
+          }
+        })
+
+        console.log("Participants by category:", participantsByCategory)
+
+        // Check if any eligible category has at least 6 participants
+        let hasEligibleGroup = false
+        for (const category of data.eligible_categories) {
+          const count = participantsByCategory[category]?.length || 0
+          if (count >= 6) {
+            hasEligibleGroup = true
+            break
+          }
+        }
+
+        if (!hasEligibleGroup) {
+          setPromoError("Promo B6G1 memerlukan minimal 6 peserta dari kategori yang sama")
+          return
+        }
+      }
+      // Regular participant type restriction check
+      else if (data.participant_type) {
         // Check if any participant matches the required type
         const hasMatchingParticipant = participants.some((p) => p.participant_type === data.participant_type)
         if (!hasMatchingParticipant) {
@@ -719,11 +802,21 @@ const PaymentSummary = ({
         }
       }
 
+      // Apply the promo
       setAppliedPromo(data)
-      toast({
-        title: "Promo berhasil diterapkan",
-        description: `${data.discount_type === "percentage" ? data.discount_value + "%" : "Rp " + data.discount_value.toLocaleString("id-ID")} diskon`,
-      })
+      
+      // Show appropriate toast message based on promo type
+      if (data.promo_logic_type === 'B6G1_SAME_CATEGORY') {
+        toast({
+          title: "Promo B6G1 berhasil diterapkan",
+          description: "Setiap 6 peserta dari kategori yang sama mendapatkan 1 tiket gratis",
+        })
+      } else {
+        toast({
+          title: "Promo berhasil diterapkan",
+          description: `${data.discount_type === "percentage" ? data.discount_value + "%" : "Rp " + data.discount_value.toLocaleString("id-ID")} diskon`,
+        })
+      }
 
       // Store the promo code in registration data
       setRegistrationData({

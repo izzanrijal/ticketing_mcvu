@@ -1,0 +1,104 @@
+# Implementation Plan: "Group Symposium Promo" (Code-Based)
+
+This plan outlines the steps to implement a time-limited, code-based "Buy 6, Get 1 Free" promotion for symposium tickets, where all 6 participants must be from the same eligible category.
+
+---
+
+### **Part 1: Backend & Database**
+
+The backend will manage promo code validation, time limits, and the final discount calculation.
+
+**Step 1.1: Modify `promo_codes` Table Schema**
+
+*   **Action:** Add new columns to the `promo_codes` table to support the new promotion logic.
+*   **Table:** `promo_codes`
+*   **Columns to Add:**
+    1.  `promo_logic_type`: `TEXT` (e.g., 'B6G1_SAME_CATEGORY', 'PERCENTAGE_DISCOUNT'). This allows for different kinds of promos.
+    2.  `valid_from`: `TIMESTAMPTZ`. The start date/time of the promo's validity.
+    3.  `valid_until`: `TIMESTAMPTZ`. The end date/time of the promo's validity.
+    4.  `eligible_categories`: `TEXT[]` (Array of text). Stores the categories this promo can apply to (e.g., `{'general_doctor', 'other', 'nurse'}`).
+*   **Purpose:** To make the promotion system flexible and to store the new rules directly in the database.
+*   **Status:** To Do
+
+**Step 1.2: Implement Core Discount Logic in API Route**
+
+*   **File:** `app/api/register/route.ts`
+*   **Action:** Modify the promo code handling logic within the main `POST` request handler.
+    1.  When a `promoCode` is received, fetch its details from the `promo_codes` table.
+    2.  **Validation:**
+        *   Check if the promo code exists and hasn't expired (`NOW()` is between `valid_from` and `valid_until`).
+        *   Check if `promo_logic_type` is `'B6G1_SAME_CATEGORY'`. If not, use existing discount logic.
+    3.  **Create New Helper Function:** `calculateB6G1Discount(participants, promoDetails)`.
+        *   **Input:** The list of participants and the fetched promo code details.
+        *   **Logic:**
+            a. Initialize `totalDiscount = 0`.
+            b. Group participants by their `category`.
+            c. For each category group (e.g., all 'general_doctor' participants):
+                i. Check if the category is in `promoDetails.eligible_categories`.
+                ii. Count how many participants in this group have a symposium ticket (`count`).
+                iii. Calculate `numberOfDiscounts = Math.floor(count / 6)`.
+                iv. If `numberOfDiscounts > 0`, find the symposium price for that category and add `numberOfDiscounts * price` to `totalDiscount`.
+        *   **Output:** The calculated `totalDiscount`.
+*   **Status:** To Do
+
+**Step 1.3: Integrate Discount into Final Calculation**
+
+*   **File:** `app/api/register/route.ts`
+*   **Action:** Use the output from `calculateB6G1Discount` to determine the final price.
+    1.  Calculate the subtotal of all tickets.
+    2.  Call the discount calculation function.
+    3.  Subtract the returned discount from the subtotal to get the `final_amount`.
+    4.  Store the discount amount in the `registrations.promo_discount` column.
+*   **Status:** To Do
+
+---
+
+### **Part 2: Frontend Implementation**
+
+The frontend will validate the promo code and display the correct discount to the user.
+
+**Step 2.1: Create a Promo Validation API Endpoint**
+
+*   **File:** `app/api/promo/validate/route.ts` (New file)
+*   **Action:** Create a dedicated endpoint to check a promo code's validity against the current participant list without creating a registration.
+    *   **Input:** `{ promoCode: string, participants: Participant[] }`
+    *   **Logic:** Re-uses the `calculateB6G1Discount` function from the backend.
+    *   **Output:** `{ isValid: boolean, discountAmount: number, message: string }`
+*   **Purpose:** To provide instant feedback to the user when they apply a code.
+*   **Status:** To Do
+
+**Step 2.2: Update Payment Summary Component**
+
+*   **File:** `components/registration/payment-summary.tsx`
+*   **Action:** Modify the UI to handle promo code input and display.
+    1.  When the user clicks "Apply Promo", call the new `/api/promo/validate` endpoint.
+    2.  Based on the response, update the component's state.
+    3.  Display a success or error message to the user.
+    4.  If valid, render a line item for the promo discount (e.g., "Promo Diskon: - Rp 750.000").
+    5.  Update the final total displayed to the user.
+*   **Status:** To Do
+
+---
+
+### **Part 3: Testing and Verification**
+
+**Step 3.1: Backend Testing**
+
+*   **Action:** Test both the validation and registration endpoints.
+*   **Scenarios:**
+    *   **Valid:** 6 `nurse` participants -> 1 free ticket discount.
+    *   **Valid:** 13 `general_doctor` participants -> 2 free tickets discount.
+    *   **Invalid:** 5 participants -> No discount.
+    *   **Invalid:** 6 participants from mixed categories (3 `nurse`, 3 `other`) -> No discount.
+    *   **Invalid:** Expired or non-existent promo code -> Error message.
+*   **Status:** To Do
+
+**Step 3.2: End-to-End Manual Testing**
+
+*   **Action:** Test the full user flow from the UI.
+*   **Scenarios:**
+    *   Enter a valid code with a qualifying group of participants; verify summary updates.
+    *   Enter a valid code with a non-qualifying group; verify error message.
+    *   Enter an invalid/expired code; verify error message.
+    *   Complete a registration with a valid promo and check the final amounts in the `registrations` database table.
+*   **Status:** To Do
